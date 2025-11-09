@@ -1,0 +1,14 @@
+{
+    "name": "wangnianyi2001.unity-pack.base",
+    "rootNamespace": "Nianyi.UnityPack",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
