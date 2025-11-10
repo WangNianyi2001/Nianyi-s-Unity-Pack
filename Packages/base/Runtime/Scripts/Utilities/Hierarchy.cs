@@ -1,14 +1,11 @@
-using UnityEngine;
-#if UNITY_EDITOR
-using UnityEditor;
-using UnityEditor.SceneManagement;
-#endif
+using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
+using UnityEditor;
+using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
-	public static class Scene
+	public static class Hierarchy
 	{
 		#region Existence
 		/// <remarks>Will create a prefab instance if <c>template</c> is a prefab asset and in edit mode.</remarks>
@@ -76,33 +73,36 @@ namespace Nianyi.UnityPack
 		}
 		#endregion
 
-		#region Editor
-		public static SceneMode GetCurrentMode()
+		#region Components
+		public static bool EnsureComponent<T>(this GameObject target, out T component) where T : Component
 		{
-#if !UNITY_EDITOR
+			if(target.TryGetComponent(out component))
+				return false;
+			component = target.AddComponent<T>();
 			return true;
-#else
-			if(Application.isPlaying)
-				return SceneMode.Play;
-			if(PrefabStageUtility.GetCurrentPrefabStage() != null)
-				return SceneMode.Prefab;
-			return SceneMode.Edit;
-#endif
 		}
 
-		public static Camera EditorSceneCamera
+		public static bool RemoveComponent<T>(this GameObject target) where T : Component
 		{
-			get
+			if(!target.TryGetComponent<T>(out var component))
+				return false;
+			Object.Destroy(component);
+			return true;
+		}
+
+		public static bool RemoveComponent<T>(this GameObject target, ref T component, bool force = true) where T : Component
+		{
+			if(!component || component.gameObject != target)
 			{
-#if UNITY_EDITOR
-				if(SceneView.currentDrawingSceneView != null)
-					return SceneView.currentDrawingSceneView.camera;
-#endif
-				return null;
+				if(force)
+					component = target.GetComponent<T>();
+				if(!component)
+					return false;
 			}
+			Object.Destroy(component);
+			component = null;
+			return true;
 		}
 		#endregion
 	}
-
-	public enum SceneMode { Play, Edit, Prefab }
 }

@@ -26,7 +26,7 @@ namespace Nianyi.UnityPack
 				Debug.LogWarning($"Attempting to destroy asset {target}, aborting.", target);
 				return;
 			}
-			if(Scene.GetCurrentMode() == SceneMode.Play)
+			if(Scene.IsPlaying)
 				Object.Destroy(target);
 			else
 				Object.DestroyImmediate(target);

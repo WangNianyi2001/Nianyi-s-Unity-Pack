@@ -1,0 +1,12 @@
+{
+  "name": "com.wangnianyi2001.unity-pack.character-control",
+  "displayName": "Nianyi's Unity Pack - Character Control",
+  "version": "0.0.0",
+  "author": {
+    "name": "Nianyi Wang",
+    "url": "http://wangnianyi2001.com/"
+  },
+  "dependencies": {
+    "com.wangnianyi2001.unity-pack.base": ">=0.0.0"
+  }
+}
