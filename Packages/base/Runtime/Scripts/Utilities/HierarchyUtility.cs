@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
-	public static class Hierarchy
+	public static class HierarchyUtility
 	{
 		#region Existence
 		/// <remarks>Will create a prefab instance if <c>template</c> is a prefab asset and in edit mode.</remarks>

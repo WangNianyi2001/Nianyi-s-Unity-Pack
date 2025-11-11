@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Nianyi.UnityPack
 {
-	public static class Math
+	public static class MathUtility
 	{
 		#region Float
 		/// <summary>
@@ -43,45 +43,6 @@ namespace Nianyi.UnityPack
 			eulers.x = zenith;
 
 			return eulers;
-		}
-		#endregion
-
-		#region Capsule
-		public static void GetCapsuleCenters(in CapsuleCollider capsule, out Vector3 center1, out Vector3 center2)
-		{
-			float half = capsule.height * 0.5f - capsule.radius;
-			var dir = capsule.direction switch
-			{
-				0 => Vector3.right,
-				1 => Vector3.up,
-				_ => Vector3.forward,
-			};
-
-			center1 = capsule.transform.TransformPoint(capsule.center + dir * half);
-			center2 = capsule.transform.TransformPoint(capsule.center - dir * half);
-		}
-		#endregion
-
-		#region Vector
-		public static Vector3 WallSlide(Vector3 movement, IEnumerable<Vector3> normals, float threshold = 0.01f)
-		{
-			if(normals.Count() == 0)
-				return movement;
-
-			const int maxStep = 4;
-			threshold *= threshold;
-			for(int i = 0; i < maxStep; ++i)
-			{
-				foreach(var normal in normals)
-				{
-					if(Vector3.Dot(movement, normal) >= 0f)
-						continue;
-					movement = Vector3.ProjectOnPlane(movement, normal);
-				}
-				if(movement.sqrMagnitude < threshold)
-					break;
-			}
-			return movement;
 		}
 		#endregion
 	}

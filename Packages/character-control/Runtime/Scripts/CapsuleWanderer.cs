@@ -31,7 +31,7 @@ namespace Nianyi.UnityPack
 			capsule.radius = profile.radius;
 			capsule.center = Vector3.up * (capsule.height / 2);
 
-			if(!profile.useRigidbody)
+			if(!profile.usePhysics)
 				gameObject.RemoveComponent(ref rigidbody);
 			else
 			{
@@ -76,7 +76,7 @@ namespace Nianyi.UnityPack
 		void Awake()
 		{
 #if UNITY_EDITOR
-			if(Scene.IsEditing)
+			if(SceneUtility.IsEditing)
 			{
 				EditorUpdate();
 				return;
@@ -94,7 +94,7 @@ namespace Nianyi.UnityPack
 		void Update()
 		{
 #if UNITY_EDITOR
-			if(Scene.IsEditing)
+			if(SceneUtility.IsEditing)
 			{
 				EditorUpdate();
 				return;
@@ -158,7 +158,8 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Physics
-		Vector3 Position {
+		Vector3 Position
+		{
 			get => Body.position;
 			set
 			{
@@ -167,9 +168,28 @@ namespace Nianyi.UnityPack
 			}
 		}
 
-		void TruncateMovement(Vector3 desiredMovement, out Vector3 truncated, out Vector3 wallSlide)
+		struct OutputImpulse
 		{
-			Math.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
+			public Rigidbody rigidbody;
+			public Vector3 position;
+			public Vector3 impulse;
+		}
+
+		void ApplyImpulses(IEnumerable<OutputImpulse> impulses)
+		{
+			if(impulses == null)
+				return;
+			foreach(var impulse in impulses)
+			{
+				if(!impulse.rigidbody)
+					continue;
+				impulse.rigidbody.AddForceAtPosition(impulse.impulse, impulse.position, ForceMode.Impulse);
+			}
+		}
+
+		void TruncateMovement(Vector3 desiredMovement, float dt, out Vector3 truncated, out Vector3 wallClip, out OutputImpulse[] impulses)
+		{
+			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
 			bool hasHit = Physics.CapsuleCast(
 				topCenter, bottomCenter,
 				capsule.radius - ContactOffset,
@@ -179,16 +199,69 @@ namespace Nianyi.UnityPack
 			if(!hasHit)
 			{
 				truncated = desiredMovement;
-				wallSlide = Vector3.zero;
+				wallClip = Vector3.zero;
+				impulses = null;
 			}
 			else
 			{
 				truncated = desiredMovement.normalized * (hit.distance - ContactOffset);
 				desiredMovement -= truncated;
-
 				DetectHotContactOnDirection(desiredMovement);
-				var normals = contacts.Select(c => c.normal).ToArray();
-				wallSlide = Math.WallSlide(desiredMovement, normals, ContactOffset);
+
+				if(!Profile.usePhysics)
+				{
+					var constraints = contacts.Select(c => new PhysicsUtility.WallClipConstraint()
+					{
+						normal = c.normal,
+						depth = 0f,
+					}).ToList();
+					wallClip = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
+					impulses = null;
+				}
+				else
+				{
+					// TODO: Use local cache to avoid repetitive computation.
+					// TODO: Coefficient of restitution.
+					var constraints = contacts.Select(contact =>
+					{
+						PhysicsUtility.WallClipConstraint constraint = new()
+						{
+							normal = contact.normal,
+							depth = 0f,
+						};
+
+						if(!contact.isStatic)
+						{
+							var target = contact.rigidbody;
+							Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(contact.position,
+								target.centerOfMass, target.velocity, target.angularVelocity
+							);
+							Vector3 relativeVelocity = Velocity - targetVelocity;
+							float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
+							Vector3 impulse = mu * relativeVelocity;
+							Vector3 targetMovement = impulse * (dt / target.mass);
+							float depth = Vector3.Project(targetMovement, contact.normal).magnitude;
+							constraint.depth = Mathf.Clamp(0, ContactOffset, depth);
+						}
+
+						return constraint;
+					}).ToList();
+
+					var movement = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
+					wallClip = movement;
+
+					// TODO: Lateral frictions.
+					impulses = contacts.Where(c => !c.isStatic).Select(contact =>
+					{
+						var target = contact.rigidbody;
+						float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
+						return new OutputImpulse() {
+							impulse = Vector3.Project(movement, contact.normal) * (2 * mu / dt),
+							position = contact.position,
+							rigidbody = target,
+						};
+					}).ToArray();
+				}
 			}
 		}
 
@@ -197,14 +270,29 @@ namespace Nianyi.UnityPack
 
 		class ContactInfo
 		{
-			public bool isHot;
 			public Vector3 position;
 			public Vector3 normal;
+
 			public Collider collider;
+			public Rigidbody rigidbody;
+
+			public bool isHot;
 			public bool isGround;
+			public bool isStatic;
+
+			public float mass;
 		}
 
 		readonly List<ContactInfo> contacts = new();
+
+		void AddContact(ContactInfo contact)
+		{
+			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
+			contact.isStatic = !contact.collider.TryGetComponent(out contact.rigidbody);
+			contact.mass = contact.isStatic ? Mathf.Infinity : contact.rigidbody.mass;
+
+			contacts.Add(contact);
+		}
 
 		void UpdateContact(Collision collision)
 		{
@@ -237,12 +325,6 @@ namespace Nianyi.UnityPack
 			});
 		}
 
-		void AddContact(ContactInfo contact)
-		{
-			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
-			contacts.Add(contact);
-		}
-
 		void RemoveContacts(Collider collider)
 		{
 			contacts.RemoveAll(c => c.collider == collider);
@@ -255,7 +337,7 @@ namespace Nianyi.UnityPack
 
 		void DetectHotContactOnDirection(Vector3 direction)
 		{
-			Math.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
+			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
 			var hits = Physics.CapsuleCastAll(topCenter, bottomCenter, capsule.radius - ContactOffset, direction, ContactOffset * 2);
 			foreach(var hit in hits)
 				UpdateContact(hit, true);
@@ -320,7 +402,8 @@ namespace Nianyi.UnityPack
 				if(IsGrounded)
 					break;
 
-				TruncateMovement(desiredDy, out var step, out desiredDy);
+				TruncateMovement(desiredDy, dt, out var step, out desiredDy, out var impulses);
+				ApplyImpulses(impulses);
 				Position += step;
 			}
 		}
@@ -364,7 +447,8 @@ namespace Nianyi.UnityPack
 			const int maxAuditStep = 4;
 			for(int i = 0; i < maxAuditStep; ++i)
 			{
-				TruncateMovement(movement, out var step, out movement);
+				TruncateMovement(movement, dt, out var step, out movement, out var impulses);
+				ApplyImpulses(impulses);
 				if(!IsGrounded)
 					step.y = Mathf.Min(0, step.y);
 				Position += step;

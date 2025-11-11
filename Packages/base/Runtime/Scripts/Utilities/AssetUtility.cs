@@ -5,7 +5,7 @@ using UnityEditor;
 
 namespace Nianyi.UnityPack
 {
-	public static class Asset
+	public static class AssetUtility
 	{
 		/// <remarks>Only works in editor.</remarks>
 		public static bool IsAsset(this Object target)
@@ -26,7 +26,7 @@ namespace Nianyi.UnityPack
 				Debug.LogWarning($"Attempting to destroy asset {target}, aborting.", target);
 				return;
 			}
-			if(Scene.IsPlaying)
+			if(SceneUtility.IsPlaying)
 				Object.Destroy(target);
 			else
 				Object.DestroyImmediate(target);

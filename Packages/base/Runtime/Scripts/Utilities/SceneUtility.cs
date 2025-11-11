@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace Nianyi.UnityPack
 {
-	public static class Scene
+	public static class SceneUtility
 	{
 		#region Editor
 		public static SceneMode CurrentMode

@@ -18,9 +18,9 @@ namespace Nianyi.UnityPack
 
 		public LayerMask collisionLayerMask = ~0;
 
-		public bool useRigidbody = true;
+		public bool usePhysics = true;
 
-		[ShowWhen("useRigidbody", true)]
+		[ShowWhen("usePhysics", true)]
 		[Min(0)] public float mass = 1f;
 		#endregion
 
