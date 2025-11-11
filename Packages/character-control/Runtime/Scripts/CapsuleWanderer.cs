@@ -109,12 +109,12 @@ namespace Nianyi.UnityPack
 			ClearHotContacts();
 			if(dt > 0)
 			{
-				Vector3 startingPosition = Body.position;
+				Vector3 startingPosition = Position;
 				ProcessMovement(dt);
 				ProcessOrientation(dt);
 				ProcessGravity(dt);
 				ResolveCollision();
-				Velocity = (Body.position - startingPosition) / dt;
+				Velocity = (Position - startingPosition) / dt;
 			}
 		}
 
@@ -143,10 +143,10 @@ namespace Nianyi.UnityPack
 		void OnDrawGizmos()
 		{
 			Gizmos.color = Color.yellow;
-			Gizmos.DrawLine(Body.position, Body.position + desiredVelocity);
+			Gizmos.DrawLine(Position, Position + desiredVelocity);
 
 			Gizmos.color = Color.red;
-			Gizmos.DrawLine(Body.position, Body.position + Velocity);
+			Gizmos.DrawLine(Position, Position + Velocity);
 
 			Gizmos.color = new(1, 0, 0, .3f);
 			foreach(var contact in contacts)
@@ -158,6 +158,15 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Physics
+		Vector3 Position {
+			get => Body.position;
+			set
+			{
+				Body.position = value;
+				ClearHotContacts();
+			}
+		}
+
 		void TruncateMovement(Vector3 desiredMovement, out Vector3 truncated, out Vector3 wallSlide)
 		{
 			Math.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
@@ -263,7 +272,7 @@ namespace Nianyi.UnityPack
 				{
 					var collider = contact.collider;
 					if(!Physics.ComputePenetration(
-						capsule, Body.position, Body.rotation,
+						capsule, Position, Body.rotation,
 						collider, collider.transform.position, collider.transform.rotation,
 						out var direction, out var distance
 					))
@@ -271,7 +280,7 @@ namespace Nianyi.UnityPack
 					sum += direction * distance;
 					flag = true;
 				}
-				Body.position += sum;
+				Position += sum;
 				if(!flag)
 					break;
 			}
@@ -282,7 +291,7 @@ namespace Nianyi.UnityPack
 		public bool IsGrounded { get; private set; }
 		public Vector3 GroundNormal { get; private set; }
 
-		void DetectGroundedState()
+		void UpdateGroundedState()
 		{
 			DetectHotContactOnDirection(Vector3.down);
 			IsGrounded = contacts.Any(c => c.isGround);
@@ -307,12 +316,12 @@ namespace Nianyi.UnityPack
 			const int maxStep = 4;
 			for(int i = 0; i < maxStep; ++i)
 			{
-				DetectGroundedState();
+				UpdateGroundedState();
 				if(IsGrounded)
 					break;
 
 				TruncateMovement(desiredDy, out var step, out desiredDy);
-				Body.position += step;
+				Position += step;
 			}
 		}
 		#endregion
@@ -346,20 +355,20 @@ namespace Nianyi.UnityPack
 				movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
 			}
 
-			// Tweak the movement according to ground slope.
-			DetectGroundedState();
+			// Boost the movement according to ground slope.
+			UpdateGroundedState();
 			if(IsGrounded)
-			{
-				movement = Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude;
-			}
+				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
 
 			// Truncate movement based on wall sliding.
 			const int maxAuditStep = 4;
 			for(int i = 0; i < maxAuditStep; ++i)
 			{
 				TruncateMovement(movement, out var step, out movement);
-				Body.position += step;
-				DetectGroundedState();
+				if(!IsGrounded)
+					step.y = Mathf.Min(0, step.y);
+				Position += step;
+				UpdateGroundedState();
 				if(!IsGrounded)
 					movement = Vector3.ProjectOnPlane(movement, Physics.gravity);
 				if(movement.magnitude < ContactOffset)
