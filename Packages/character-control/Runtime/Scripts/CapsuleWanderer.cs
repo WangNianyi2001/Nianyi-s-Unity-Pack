@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Nianyi.UnityPack
 {
@@ -31,7 +32,7 @@ namespace Nianyi.UnityPack
 			capsule.radius = profile.radius;
 			capsule.center = Vector3.up * (capsule.height / 2);
 
-			if(!profile.usePhysics)
+			if(!profile.useRigidbody)
 				gameObject.RemoveComponent(ref rigidbody);
 			else
 			{
@@ -106,11 +107,13 @@ namespace Nianyi.UnityPack
 		{
 			float dt = Time.fixedDeltaTime;
 
+			ClearContacts();
 			if(dt > 0)
 			{
 				ProcessMovement(dt);
 				ProcessOrientation(dt);
 			}
+			ResolveCollision();
 		}
 
 #if UNITY_EDITOR
@@ -119,7 +122,92 @@ namespace Nianyi.UnityPack
 			GetComponentReferences();
 			ApplyProfile();
 		}
+
+		void OnDrawGizmos()
+		{
+			Gizmos.color = Color.yellow;
+			Gizmos.DrawLine(Body.position, Body.position + desiredVelocity);
+
+			Gizmos.color = Color.red;
+			Gizmos.DrawLine(Body.position, Body.position + Velocity);
+
+			Gizmos.color = new(1, 0, 0, .3f);
+			foreach(var contact in contacts)
+			{
+				Gizmos.DrawSphere(contact.position, 0.1f);
+			}
+		}
 #endif
+		#endregion
+
+		#region Contact
+		class ContactInfo
+		{
+			public Vector3 position;
+			public Vector3 normal;
+			public Collider collider;
+			public bool isGround;
+		}
+
+		readonly List<ContactInfo> contacts = new();
+
+		void UpdateContact(RaycastHit hit)
+		{
+			Collider collider = hit.collider;
+			if(collider == null || collider == capsule)
+				return;
+			RemoveContacts(collider);
+			contacts.Add(new()
+			{
+				position = hit.point,
+				normal = hit.normal,
+				collider = collider,
+			});
+		}
+
+		void RemoveContacts(Collider collider)
+		{
+			contacts.RemoveAll(c => c.collider == collider);
+		}
+
+		void ClearContacts()
+		{
+			contacts.Clear();
+		}
+
+		void DetectContactOnDirection(Vector3 direction)
+		{
+			Math.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
+			float epsilon = capsule.contactOffset;
+			var hits = Physics.CapsuleCastAll(topCenter, bottomCenter, capsule.radius - epsilon, direction, epsilon * 2);
+			foreach(var hit in hits)
+				UpdateContact(hit);
+		}
+
+		void ResolveCollision()
+		{
+			const int maxRound = 2;
+			for(int i = 0; i < maxRound; ++i)
+			{
+				bool flag = false;
+				Vector3 sum = Vector3.zero;
+				foreach(var contact in contacts)
+				{
+					var collider = contact.collider;
+					if(!Physics.ComputePenetration(
+						capsule, Body.position, Body.rotation,
+						collider, collider.transform.position, collider.transform.rotation,
+						out var direction, out var distance
+					))
+						continue;
+					sum += direction * distance;
+					flag = true;
+				}
+				Body.position += sum;
+				if(!flag)
+					break;
+			}
+		}
 		#endregion
 
 		#region Wander
@@ -128,8 +216,8 @@ namespace Nianyi.UnityPack
 
 		Vector3 desiredVelocity;
 		public Vector3 Velocity { get; private set; }
+
 		public bool IsMoving => desiredVelocity.sqrMagnitude > 0 && Velocity.sqrMagnitude > 0;
-		public bool IsGrounded { get; private set; }
 
 		public void MoveByVelocity(Vector3 worldVelocity)
 		{
@@ -138,16 +226,55 @@ namespace Nianyi.UnityPack
 
 		void ProcessMovement(float dt)
 		{
-			Vector3 velocity = desiredVelocity;
-			if(Profile.useAcceleration)
+			// Recording initial data.
+			Vector3 startingPosition = Body.position;
+
+			// Calculate estimated movement.
+			Vector3 movement;
+			if(!Profile.useAcceleration)
+				movement = desiredVelocity * dt;
+			else
 			{
-				float delta = Vector3.Distance(Velocity, desiredVelocity);
-				float t = Mathf.Clamp01(Profile.acceleration * dt / delta);
-				velocity = Vector3.Lerp(Velocity, desiredVelocity, t);
+				float acceleration = Vector3.Distance(Velocity, desiredVelocity);
+				float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
+				movement = Vector3.Lerp(Velocity, desiredVelocity, t) * dt;
 			}
 
-			Velocity = velocity;
-			Body.position += Velocity * dt;
+			// Audit movement.
+			float epsilon = capsule.contactOffset;
+			Vector3 remainingMovement = movement;
+			const int maxAuditStep = 4;
+			for(int i = 0; i < maxAuditStep; ++i)
+			{
+				DetectContactOnDirection(remainingMovement);
+				var normals = contacts.Select(c => c.normal).ToArray();
+				Vector3 step = Math.WallSlide(remainingMovement, normals, epsilon);
+				if(step.magnitude < epsilon)
+					break;
+
+				Math.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
+				bool hasHit = Physics.CapsuleCast(
+					topCenter, bottomCenter,
+					capsule.radius - epsilon,
+					step, out var hit, step.magnitude,
+					Profile.collisionLayerMask
+				);
+				if(!hasHit)
+				{
+					Body.position += remainingMovement;
+					remainingMovement = Vector3.zero;
+					break;
+				}
+				UpdateContact(hit);
+
+				float stepDistance = hit.distance - epsilon;
+				step = step.normalized * stepDistance;
+				Body.position += step;
+				remainingMovement -= step;
+			}
+
+			// Updating the velocity record.
+			Velocity = (Body.position - startingPosition) / dt;
 		}
 		#endregion
 
@@ -171,13 +298,16 @@ namespace Nianyi.UnityPack
 
 		public void ProcessOrientation(float dt)
 		{
-			Vector3 rotation = desiredRotation;
+			Vector3 rotation;
 			if(!Profile.useSmoothOrientation)
-				desiredRotation = default;
+			{
+				rotation = desiredRotation;
+				desiredRotation = Vector3.zero;
+			}
 			else
 			{
 				float t = Mathf.Clamp01(Profile.smoothOrientationCoefficient * dt);
-				rotation *= t;
+				rotation = desiredRotation * t;
 				desiredRotation *= 1 - t;
 			}
 
