@@ -110,6 +110,7 @@ namespace Nianyi.UnityPack
 			if(dt > 0)
 			{
 				Vector3 startingPosition = Position;
+				ProcessBufferedVelocityChange(dt);
 				ProcessMovement(dt);
 				ProcessOrientation(dt);
 				ProcessGravity(dt);
@@ -158,6 +159,23 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Physics
+		Vector3 bufferedVelocityChange;
+
+		void ProcessBufferedVelocityChange(float dt)
+		{
+			Vector3 desiredMovement = bufferedVelocityChange * dt;
+			const int maxStep = 4;
+			for(int i = 0; i < maxStep; ++i)
+			{
+				if(desiredMovement.magnitude < ContactOffset)
+					break;
+				TruncateMovement(desiredMovement, dt, out var step, out desiredMovement, out var impulses);
+				ApplyImpulses(impulses);
+				Position += step;
+			}
+			bufferedVelocityChange = Vector3.zero;
+		}
+
 		Vector3 Position
 		{
 			get => Body.position;
@@ -201,67 +219,66 @@ namespace Nianyi.UnityPack
 				truncated = desiredMovement;
 				wallClip = Vector3.zero;
 				impulses = null;
+				return;
+			}
+			truncated = desiredMovement.normalized * (hit.distance - ContactOffset);
+			desiredMovement -= truncated;
+			DetectHotContactOnDirection(desiredMovement);
+
+			if(!Profile.usePhysics)
+			{
+				var constraints = contacts.Select(c => new PhysicsUtility.WallClipConstraint()
+				{
+					normal = c.normal,
+					depth = 0f,
+				}).ToList();
+				wallClip = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
+				impulses = null;
 			}
 			else
 			{
-				truncated = desiredMovement.normalized * (hit.distance - ContactOffset);
-				desiredMovement -= truncated;
-				DetectHotContactOnDirection(desiredMovement);
-
-				if(!Profile.usePhysics)
+				// TODO: Use local cache to avoid repetitive computation.
+				// TODO: Coefficient of restitution.
+				var constraints = contacts.Select(contact =>
 				{
-					var constraints = contacts.Select(c => new PhysicsUtility.WallClipConstraint()
+					PhysicsUtility.WallClipConstraint constraint = new()
 					{
-						normal = c.normal,
+						normal = contact.normal,
 						depth = 0f,
-					}).ToList();
-					wallClip = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
-					impulses = null;
-				}
-				else
-				{
-					// TODO: Use local cache to avoid repetitive computation.
-					// TODO: Coefficient of restitution.
-					var constraints = contacts.Select(contact =>
-					{
-						PhysicsUtility.WallClipConstraint constraint = new()
-						{
-							normal = contact.normal,
-							depth = 0f,
-						};
+					};
 
-						if(!contact.isStatic)
-						{
-							var target = contact.rigidbody;
-							Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(contact.position,
-								target.centerOfMass, target.velocity, target.angularVelocity
-							);
-							Vector3 relativeVelocity = Velocity - targetVelocity;
-							float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
-							Vector3 impulse = mu * relativeVelocity;
-							Vector3 targetMovement = impulse * (dt / target.mass);
-							float depth = Vector3.Project(targetMovement, contact.normal).magnitude;
-							constraint.depth = Mathf.Clamp(0, ContactOffset, depth);
-						}
-
-						return constraint;
-					}).ToList();
-
-					var movement = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
-					wallClip = movement;
-
-					// TODO: Lateral frictions.
-					impulses = contacts.Where(c => !c.isStatic).Select(contact =>
+					if(!contact.isStatic)
 					{
 						var target = contact.rigidbody;
+						Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(contact.position,
+							target.centerOfMass, target.velocity, target.angularVelocity
+						);
+						Vector3 relativeVelocity = Velocity - targetVelocity;
 						float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
-						return new OutputImpulse() {
-							impulse = Vector3.Project(movement, contact.normal) * (2 * mu / dt),
-							position = contact.position,
-							rigidbody = target,
-						};
-					}).ToArray();
-				}
+						Vector3 impulse = mu * relativeVelocity;
+						Vector3 targetMovement = impulse * (dt / target.mass);
+						float depth = Vector3.Project(targetMovement, contact.normal).magnitude;
+						constraint.depth = Mathf.Clamp(0, ContactOffset, depth);
+					}
+
+					return constraint;
+				}).ToList();
+
+				var movement = PhysicsUtility.WallClip(desiredMovement, constraints, ContactOffset);
+				wallClip = movement;
+
+				// TODO: Lateral frictions.
+				impulses = contacts.Where(c => !c.isStatic).Select(contact =>
+				{
+					var target = contact.rigidbody;
+					float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
+					return new OutputImpulse()
+					{
+						impulse = Vector3.Project(movement, contact.normal) * (2 * mu / dt),
+						position = contact.position,
+						rigidbody = target,
+					};
+				}).ToArray();
 			}
 		}
 
@@ -495,6 +512,15 @@ namespace Nianyi.UnityPack
 			}
 
 			Orientation = Orientation.RotateEulerWithZenithClamped(rotation, Profile.zenithLimit);
+		}
+		#endregion
+
+		#region Jumping
+		public void Jump()
+		{
+			if(!IsGrounded)
+				return;
+			bufferedVelocityChange += -Physics.gravity.normalized * Mathf.Sqrt(2 * Profile.jumpHeight * Physics.gravity.magnitude);
 		}
 		#endregion
 		#endregion

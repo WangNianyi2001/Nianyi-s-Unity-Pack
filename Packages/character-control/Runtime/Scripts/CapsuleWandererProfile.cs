@@ -57,5 +57,13 @@ namespace Nianyi.UnityPack
 		[ShowWhen("useSmoothOrientation", true)]
 		[Min(1)] public float smoothOrientationCoefficient = 10f;
 		#endregion
+
+		#region Jumping
+		[Header("Jumping")]
+
+		public bool enableJumping = true;
+		[ShowWhen("enableJumping", true)]
+		[Min(0)] public float jumpHeight = 1.5f;
+		#endregion
 	}
 }
