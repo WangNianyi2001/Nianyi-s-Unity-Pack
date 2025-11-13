@@ -520,7 +520,11 @@ namespace Nianyi.UnityPack
 		{
 			if(!IsGrounded)
 				return;
-			bufferedVelocityChange += -Physics.gravity.normalized * Mathf.Sqrt(2 * Profile.jumpHeight * Physics.gravity.magnitude);
+			Vector3 upDirection = -Physics.gravity.normalized;
+			float desiredVy = Mathf.Sqrt(2 * Profile.jumpHeight * Physics.gravity.magnitude);
+			if(Vector3.Dot(Velocity, upDirection) >= desiredVy)
+				return;
+			bufferedVelocityChange += upDirection * desiredVy - Vector3.Project(Velocity, upDirection);
 		}
 		#endregion
 		#endregion
