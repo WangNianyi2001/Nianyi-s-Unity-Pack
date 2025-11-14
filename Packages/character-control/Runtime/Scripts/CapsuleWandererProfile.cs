@@ -30,14 +30,13 @@ namespace Nianyi.UnityPack
 		[Tooltip("Meters per second.")]
 		[Min(0)] public float movementSpeed = 5f;
 
-		public bool useAcceleration = true;
-
 		[Tooltip("Meters per square second.")]
 		[ShowWhen("useAcceleration", true)]
 		[Min(0)] public float acceleration = 30f;
 
 		[Range(0, 90)] public float maxMovingSlope = 30f;
-		[Min(0)] public float maxStepHeight = 0.5f;
+
+		[Min(0)] public float maxStepHeight = 0.6f;
 		#endregion
 
 		#region Orientation
@@ -63,7 +62,7 @@ namespace Nianyi.UnityPack
 
 		public bool enableJumping = true;
 		[ShowWhen("enableJumping", true)]
-		[Min(0)] public float jumpHeight = 1.5f;
+		[Min(0)] public float jumpHeight = 1f;
 		#endregion
 	}
 }

@@ -1,6 +1,6 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
@@ -106,32 +106,17 @@ namespace Nianyi.UnityPack
 		{
 			float dt = Time.fixedDeltaTime;
 
-			ClearHotContacts();
+			UpdateGroundedState();
 			if(dt > 0)
 			{
-				Vector3 startingPosition = Position;
-				ProcessBufferedVelocityChange(dt);
+				Vector3 startingPosition = Body.position;
 				ProcessMovement(dt);
 				ProcessOrientation(dt);
 				ProcessGravity(dt);
 				ResolveCollision();
-				Velocity = (Position - startingPosition) / dt;
+				ProcessBufferedVelocityChange(dt);
+				Velocity = (Body.position - startingPosition) / dt;
 			}
-		}
-
-		void OnCollisionEnter(Collision collision)
-		{
-			UpdateContact(collision);
-		}
-
-		void OnCollisionStay(Collision collision)
-		{
-			UpdateContact(collision);
-		}
-
-		void OnCollisionExit(Collision collision)
-		{
-			RemoveContacts(collision.collider);
 		}
 
 #if UNITY_EDITOR
@@ -144,16 +129,10 @@ namespace Nianyi.UnityPack
 		void OnDrawGizmos()
 		{
 			Gizmos.color = Color.yellow;
-			Gizmos.DrawLine(Position, Position + desiredVelocity);
+			Gizmos.DrawLine(Body.position, Body.position + desiredVelocity);
 
 			Gizmos.color = Color.red;
-			Gizmos.DrawLine(Position, Position + Velocity);
-
-			Gizmos.color = new(1, 0, 0, .3f);
-			foreach(var contact in contacts)
-			{
-				Gizmos.DrawSphere(contact.position, 0.1f);
-			}
+			Gizmos.DrawLine(Body.position, Body.position + Velocity);
 		}
 #endif
 		#endregion
@@ -171,19 +150,9 @@ namespace Nianyi.UnityPack
 					break;
 				TruncateMovement(desiredMovement, dt, out var step, out desiredMovement, out var impulses);
 				ApplyImpulses(impulses);
-				Position += step;
+				Body.position += step;
 			}
 			bufferedVelocityChange = Vector3.zero;
-		}
-
-		Vector3 Position
-		{
-			get => Body.position;
-			set
-			{
-				Body.position = value;
-				ClearHotContacts();
-			}
 		}
 
 		struct OutputImpulse
@@ -223,11 +192,11 @@ namespace Nianyi.UnityPack
 			}
 			truncated = desiredMovement.normalized * (hit.distance - ContactOffset);
 			desiredMovement -= truncated;
-			DetectHotContactOnDirection(desiredMovement);
+			var collisions = DetectCollisionsOnDirection(desiredMovement);
 
 			if(!Profile.usePhysics)
 			{
-				var constraints = contacts.Select(c => new PhysicsUtility.WallClipConstraint()
+				var constraints = collisions.Select(c => new PhysicsUtility.WallClipConstraint()
 				{
 					normal = c.normal,
 					depth = 0f,
@@ -239,25 +208,25 @@ namespace Nianyi.UnityPack
 			{
 				// TODO: Use local cache to avoid repetitive computation.
 				// TODO: Coefficient of restitution.
-				var constraints = contacts.Select(contact =>
+				var constraints = collisions.Select(collision =>
 				{
 					PhysicsUtility.WallClipConstraint constraint = new()
 					{
-						normal = contact.normal,
+						normal = collision.normal,
 						depth = 0f,
 					};
 
-					if(!contact.isStatic)
+					if(!collision.isStatic)
 					{
-						var target = contact.rigidbody;
-						Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(contact.position,
+						var target = collision.rigidbody;
+						Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(collision.position,
 							target.centerOfMass, target.velocity, target.angularVelocity
 						);
 						Vector3 relativeVelocity = Velocity - targetVelocity;
 						float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
 						Vector3 impulse = mu * relativeVelocity;
 						Vector3 targetMovement = impulse * (dt / target.mass);
-						float depth = Vector3.Project(targetMovement, contact.normal).magnitude;
+						float depth = Vector3.Project(targetMovement, collision.normal).magnitude;
 						constraint.depth = Mathf.Clamp(0, ContactOffset, depth);
 					}
 
@@ -268,14 +237,14 @@ namespace Nianyi.UnityPack
 				wallClip = movement;
 
 				// TODO: Lateral frictions.
-				impulses = contacts.Where(c => !c.isStatic).Select(contact =>
+				impulses = collisions.Where(c => !c.isStatic).Select(collision =>
 				{
-					var target = contact.rigidbody;
+					var target = collision.rigidbody;
 					float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
 					return new OutputImpulse()
 					{
-						impulse = Vector3.Project(movement, contact.normal) * (2 * mu / dt),
-						position = contact.position,
+						impulse = Vector3.Project(movement, collision.normal) * (2 * mu / dt),
+						position = collision.position,
 						rigidbody = target,
 					};
 				}).ToArray();
@@ -285,80 +254,53 @@ namespace Nianyi.UnityPack
 		#region Contact
 		float ContactOffset => capsule.contactOffset;
 
-		class ContactInfo
+		class CollisionInfo
 		{
 			public Vector3 position;
 			public Vector3 normal;
+			public float distance;
 
 			public Collider collider;
 			public Rigidbody rigidbody;
 
-			public bool isHot;
 			public bool isGround;
 			public bool isStatic;
 
 			public float mass;
 		}
 
-		readonly List<ContactInfo> contacts = new();
-
-		void AddContact(ContactInfo contact)
-		{
-			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
-			contact.isStatic = !contact.collider.TryGetComponent(out contact.rigidbody);
-			contact.mass = contact.isStatic ? Mathf.Infinity : contact.rigidbody.mass;
-
-			contacts.Add(contact);
-		}
-
-		void UpdateContact(Collision collision)
-		{
-			Collider collider = collision.collider;
-			RemoveContacts(collider);
-			foreach(var contact in collision.contacts)
-			{
-				AddContact(new()
-				{
-					position = contact.point,
-					normal = contact.normal,
-					collider = collider,
-					isHot = false,
-				});
-			}
-		}
-
-		void UpdateContact(RaycastHit hit, bool hot = false)
+		CollisionInfo CreateCollision(RaycastHit hit)
 		{
 			Collider collider = hit.collider;
 			if(collider == null || collider == capsule)
-				return;
-			RemoveContacts(collider);
-			AddContact(new()
+				return null;
+			CollisionInfo contact = new()
 			{
 				position = hit.point,
 				normal = hit.normal,
 				collider = collider,
-				isHot = hot,
-			});
+				distance = hit.distance,
+			};
+			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
+			contact.isStatic = !contact.collider.TryGetComponent(out contact.rigidbody);
+			contact.mass = contact.isStatic ? Mathf.Infinity : contact.rigidbody.mass;
+			return contact;
 		}
 
-		void RemoveContacts(Collider collider)
-		{
-			contacts.RemoveAll(c => c.collider == collider);
-		}
-
-		void ClearHotContacts()
-		{
-			contacts.RemoveAll(c => c.isHot);
-		}
-
-		void DetectHotContactOnDirection(Vector3 direction)
+		CollisionInfo[] DetectCollisions(Vector3 path, Vector3 displacement = default)
 		{
 			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
-			var hits = Physics.CapsuleCastAll(topCenter, bottomCenter, capsule.radius - ContactOffset, direction, ContactOffset * 2);
-			foreach(var hit in hits)
-				UpdateContact(hit, true);
+
+			IEnumerable<RaycastHit> hits = Physics.CapsuleCastAll(
+				topCenter + displacement, bottomCenter + displacement,
+				capsule.radius - ContactOffset, path,
+				path.magnitude + ContactOffset
+			).Where(hit => !(hit.point == default && hit.distance == 0f));
+
+			return hits.Select(CreateCollision).Where(x => x != null).ToArray();
 		}
+		CollisionInfo[] DetectCollisionsOnDirection(Vector3 direction, float depth) => DetectCollisions(direction.normalized * depth);
+		CollisionInfo[] DetectCollisionsOnDirection(Vector3 direction) => DetectCollisionsOnDirection(direction, ContactOffset * 2);
 
 		void ResolveCollision()
 		{
@@ -367,19 +309,20 @@ namespace Nianyi.UnityPack
 			{
 				bool flag = false;
 				Vector3 sum = Vector3.zero;
-				foreach(var contact in contacts)
-				{
-					var collider = contact.collider;
-					if(!Physics.ComputePenetration(
-						capsule, Position, Body.rotation,
-						collider, collider.transform.position, collider.transform.rotation,
-						out var direction, out var distance
-					))
-						continue;
-					sum += direction * distance;
-					flag = true;
-				}
-				Position += sum;
+				// TODO: Get all touching contacts.
+				//foreach(var contact in contacts)
+				//{
+				//	Collider collider = contact.collider;
+				//	if(!Physics.ComputePenetration(
+				//		capsule, Body.position, Body.rotation,
+				//		collider, collider.transform.position, collider.transform.rotation,
+				//		out var direction, out var distance
+				//	))
+				//		continue;
+				//	sum += direction * distance;
+				//	flag = true;
+				//}
+				Body.position += sum;
 				if(!flag)
 					break;
 			}
@@ -392,13 +335,11 @@ namespace Nianyi.UnityPack
 
 		void UpdateGroundedState()
 		{
-			DetectHotContactOnDirection(Vector3.down);
-			IsGrounded = contacts.Any(c => c.isGround);
-			if(!IsGrounded)
-				GroundNormal = Vector3.zero;
-			else
+			var collisions = DetectCollisionsOnDirection(Physics.gravity);
+			IsGrounded = collisions.Any(c => c.isGround);
+			if(IsGrounded)
 			{
-				GroundNormal = contacts
+				GroundNormal = collisions
 					.Where(c => c.isGround)
 					.Select(c => c.normal)
 					.Aggregate((a, b) => a + b)
@@ -408,6 +349,8 @@ namespace Nianyi.UnityPack
 
 		void ProcessGravity(float dt)
 		{
+			if(IsGrounded)
+				return;
 			Vector3 vy = Vector3.Project(Velocity, Physics.gravity);
 			vy += Physics.gravity * dt;
 			Vector3 desiredDy = vy * dt;
@@ -415,13 +358,9 @@ namespace Nianyi.UnityPack
 			const int maxStep = 4;
 			for(int i = 0; i < maxStep; ++i)
 			{
-				UpdateGroundedState();
-				if(IsGrounded)
-					break;
-
 				TruncateMovement(desiredDy, dt, out var step, out desiredDy, out var impulses);
 				ApplyImpulses(impulses);
-				Position += step;
+				Body.position += step;
 			}
 		}
 		#endregion
@@ -444,37 +383,84 @@ namespace Nianyi.UnityPack
 		void ProcessMovement(float dt)
 		{
 			// Calculate estimated movement.
-			Vector3 movement;
-			if(!Profile.useAcceleration)
-				movement = desiredVelocity * dt;
-			else
-			{
-				Vector3 planarVelocity = Vector3.ProjectOnPlane(Velocity, Physics.gravity);
-				float acceleration = Vector3.Distance(planarVelocity, desiredVelocity);
-				float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
-				movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
-			}
+			Vector3 planarVelocity = Vector3.ProjectOnPlane(Velocity, Physics.gravity);
+			float acceleration = Vector3.Distance(planarVelocity, desiredVelocity);
+			float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
+			Vector3 movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
 
-			// Boost the movement according to ground slope.
-			UpdateGroundedState();
 			if(IsGrounded)
+			{
+				// Boost the movement according to ground slope.
 				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
 
+				if(CheckForStaircaseStepping(movement, in dt, out var steppingHeight))
+					Jump_Internal(steppingHeight);
+			}
+
 			// Truncate movement based on wall sliding.
-			const int maxAuditStep = 4;
-			for(int i = 0; i < maxAuditStep; ++i)
+			const int maxStep = 4;
+			for(int i = 0; i < maxStep && movement.magnitude >= ContactOffset; ++i)
 			{
 				TruncateMovement(movement, dt, out var step, out movement, out var impulses);
-				ApplyImpulses(impulses);
+
 				if(!IsGrounded)
-					step.y = Mathf.Min(0, step.y);
-				Position += step;
-				UpdateGroundedState();
-				if(!IsGrounded)
+				{
+					step.y = Mathf.Min(0, step.y); // TODO: Use gravity.
 					movement = Vector3.ProjectOnPlane(movement, Physics.gravity);
-				if(movement.magnitude < ContactOffset)
-					break;
+				}
+
+				Body.position += step;
+				ApplyImpulses(impulses);
 			}
+		}
+
+		bool CheckForStaircaseStepping(Vector3 movement, in float dt, out float height)
+		{
+			height = default;
+			Vector3 horizontalMovement = Vector3.ProjectOnPlane(movement, Physics.gravity);
+			if(horizontalMovement.magnitude < ContactOffset)
+				return false;
+			movement = horizontalMovement.normalized * (capsule.radius * 2);
+			Vector3 originalPosition = Body.position;
+			Vector3 upward = -Physics.gravity.normalized;
+
+			// First detection: Decides the height.
+			Body.position += upward * Profile.maxStepHeight + movement.normalized * -ContactOffset;
+			TruncateMovement(movement, dt, out movement, out _, out _);
+			Body.position = originalPosition;
+			if(!GetStaircaseHeight(movement, out height))
+				return false;
+
+			// Second detection: Decides the distance.
+			float t = Mathf.Sqrt(2f * height / Physics.gravity.magnitude);
+			movement = Vector3.ProjectOnPlane(Velocity, Physics.gravity) * t;
+			if(!GetStaircaseHeight(movement, out height))
+				return false;
+
+			// Check for elevated slope bad cases.
+			Vector3 estimatedSlopeMovement = movement - Vector3.Dot(movement, GroundNormal) / Vector3.Dot(GroundNormal, Physics.gravity) * Physics.gravity;
+			if(height - estimatedSlopeMovement.y <= ContactOffset * 3)
+				return false;
+
+			return true;
+		}
+
+		bool GetStaircaseHeight(in Vector3 movement, out float height)
+		{
+			height = 0f;
+			Vector3 upward = -Physics.gravity.normalized;
+			var groundContacts = DetectCollisions(
+				upward * (-Profile.maxStepHeight - ContactOffset),
+				upward * Profile.maxStepHeight + movement * (1 - ContactOffset / movement.magnitude)
+			).Where(c => c.isGround).ToList();
+			if(groundContacts.Count == 0)
+				return false;
+
+			var highest = groundContacts.Aggregate((a, b) => Vector3.Dot(a.position - b.position, upward) > 0 ? a : b);
+			height = Vector3.Dot(highest.position - Body.position, upward);
+			if(height <= ContactOffset)
+				return false;
+			return true;
 		}
 		#endregion
 
@@ -520,8 +506,15 @@ namespace Nianyi.UnityPack
 		{
 			if(!IsGrounded)
 				return;
+			Jump_Internal(Profile.jumpHeight);
+		}
+
+		void Jump_Internal(float height)
+		{
+			if(height <= 0f)
+				return;
 			Vector3 upDirection = -Physics.gravity.normalized;
-			float desiredVy = Mathf.Sqrt(2 * Profile.jumpHeight * Physics.gravity.magnitude);
+			float desiredVy = Mathf.Sqrt(2 * height * Physics.gravity.magnitude);
 			if(Vector3.Dot(Velocity, upDirection) >= desiredVy)
 				return;
 			bufferedVelocityChange += upDirection * desiredVy - Vector3.Project(Velocity, upDirection);
