@@ -61,8 +61,20 @@ namespace Nianyi.UnityPack
 		[Header("Jumping")]
 
 		public bool enableJumping = true;
+
 		[ShowWhen("enableJumping", true)]
-		[Min(0)] public float jumpHeight = 1f;
+		[Min(0)] public float jumpHeight = 1.2f;
+
+		public bool useCoyoteTime = true;
+
+		[ShowWhen("enableJumping", true)]
+		[ShowWhen("enableCoyote", true)]
+		[Min(0)] public float coyoteTime = 0.2f;
+
+		public bool useInputBuffer = true;
+		[ShowWhen("enableJumping", true)]
+		[ShowWhen("useInputBuffer", true)]
+		[Min(0)] public float inputBufferTime = 0.2f;
 		#endregion
 	}
 }

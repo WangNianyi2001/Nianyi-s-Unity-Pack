@@ -106,10 +106,11 @@ namespace Nianyi.UnityPack
 		{
 			float dt = Time.fixedDeltaTime;
 
-			UpdateGroundedState();
 			if(dt > 0)
 			{
 				Vector3 startingPosition = Body.position;
+				UpdateGroundedState(dt);
+				ProcessJump(dt);
 				ProcessMovement(dt);
 				ProcessOrientation(dt);
 				ProcessGravity(dt);
@@ -342,8 +343,13 @@ namespace Nianyi.UnityPack
 		public bool IsGrounded { get; private set; }
 		public Vector3 GroundNormal { get; private set; }
 
-		void UpdateGroundedState()
+		public bool IsGrounded_Coyoted => IsGrounded || coyoteTime > 0f;
+		float coyoteTime;
+
+		void UpdateGroundedState(float dt)
 		{
+			bool wasGrounded = IsGrounded;
+
 			var collisions = DetectContacts(Physics.gravity);
 			IsGrounded = collisions.Any(c => c.isGround);
 			if(IsGrounded)
@@ -353,6 +359,13 @@ namespace Nianyi.UnityPack
 					.Select(c => c.normal)
 					.Aggregate((a, b) => a + b)
 					.normalized;
+			}
+
+			if(!IsGrounded)
+			{
+				if(wasGrounded && Profile.useCoyoteTime)
+					coyoteTime = Profile.coyoteTime;
+				coyoteTime = Mathf.Max(0, coyoteTime - dt);
 			}
 		}
 
@@ -404,6 +417,9 @@ namespace Nianyi.UnityPack
 				// Boost the movement according to ground slope.
 				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
 
+			}
+			if(IsGrounded_Coyoted)
+			{
 				if(CheckForStaircaseStepping(movement, out var steppingHeight))
 					Jump_Internal(steppingHeight);
 			}
@@ -522,11 +538,11 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Jumping
+		float inputBufferTime;
+
 		public void Jump()
 		{
-			if(!IsGrounded)
-				return;
-			Jump_Internal(Profile.jumpHeight);
+			inputBufferTime = Profile.inputBufferTime;
 		}
 
 		void Jump_Internal(float height)
@@ -538,6 +554,16 @@ namespace Nianyi.UnityPack
 			if(Vector3.Dot(Velocity, upDirection) >= desiredVy)
 				return;
 			bufferedVelocityChange += upDirection * desiredVy - Vector3.Project(Velocity, upDirection);
+		}
+
+		void ProcessJump(float dt)
+		{
+			inputBufferTime = Mathf.Max(0f, inputBufferTime - dt);
+			if(inputBufferTime <= 0f)
+				return;
+			if(!IsGrounded_Coyoted)
+				return;
+			Jump_Internal(Profile.jumpHeight);
 		}
 		#endregion
 		#endregion
