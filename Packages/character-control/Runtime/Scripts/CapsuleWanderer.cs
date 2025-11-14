@@ -148,51 +148,118 @@ namespace Nianyi.UnityPack
 			{
 				if(desiredMovement.magnitude < ContactOffset)
 					break;
-				TruncateMovement(desiredMovement, dt, out var step, out desiredMovement, out var impulses);
+				TruncateMovement(desiredMovement, out var step);
+				desiredMovement -= step;
+				WallClipWithMass(desiredMovement, dt, out desiredMovement, out var impulses);
 				ApplyImpulses(impulses);
 				Body.position += step;
 			}
 			bufferedVelocityChange = Vector3.zero;
 		}
 
-		struct OutputImpulse
+		#region Collision
+		float ContactOffset => capsule.contactOffset;
+
+		class CollisionInfo
 		{
-			public Rigidbody rigidbody;
 			public Vector3 position;
-			public Vector3 impulse;
+			public Vector3 normal;
+			public float distance;
+
+			public Collider collider;
+			public Rigidbody rigidbody;
+
+			public bool isGround;
+			public bool isStatic;
+
+			public float mass;
 		}
 
-		void ApplyImpulses(IEnumerable<OutputImpulse> impulses)
+		CollisionInfo MakeCollision(RaycastHit hit)
 		{
-			if(impulses == null)
-				return;
-			foreach(var impulse in impulses)
+			Collider collider = hit.collider;
+			if(collider == null || collider == capsule)
+				return null;
+			CollisionInfo contact = new()
 			{
-				if(!impulse.rigidbody)
-					continue;
-				impulse.rigidbody.AddForceAtPosition(impulse.impulse, impulse.position, ForceMode.Impulse);
-			}
+				position = hit.point,
+				normal = hit.normal,
+				collider = collider,
+				distance = hit.distance,
+			};
+			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
+			contact.isStatic = !contact.collider.TryGetComponent(out contact.rigidbody);
+			contact.mass = contact.isStatic ? Mathf.Infinity : contact.rigidbody.mass;
+			return contact;
 		}
 
-		void TruncateMovement(Vector3 desiredMovement, float dt, out Vector3 truncated, out Vector3 wallClip, out OutputImpulse[] impulses)
+		CollisionInfo DetectCollision(Vector3 path, Vector3 displacement = default)
 		{
 			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
 			bool hasHit = Physics.CapsuleCast(
-				topCenter, bottomCenter,
+				topCenter + displacement, bottomCenter + displacement,
 				capsule.radius - ContactOffset,
-				desiredMovement, out var hit, desiredMovement.magnitude,
+				path, out var hit, path.magnitude,
 				Profile.collisionLayerMask
 			);
-			if(!hasHit)
+			if(hasHit)
+				return MakeCollision(hit);
+			else
+				return null;
+		}
+
+		CollisionInfo[] DetectCollisions(Vector3 path, Vector3 displacement = default)
+		{
+			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
+
+			IEnumerable<RaycastHit> hits = Physics.CapsuleCastAll(
+				topCenter + displacement, bottomCenter + displacement,
+				capsule.radius - ContactOffset, path,
+				path.magnitude + ContactOffset
+			).Where(hit => !(hit.point == default && hit.distance == 0f));
+
+			return hits.Select(MakeCollision).Where(x => x != null).ToArray();
+		}
+		CollisionInfo[] DetectContacts(Vector3 direction) => DetectCollisions(direction.normalized * (ContactOffset * 2));
+
+		void ResolveCollision()
+		{
+			const int maxRound = 2;
+			for(int i = 0; i < maxRound; ++i)
 			{
-				truncated = desiredMovement;
-				wallClip = Vector3.zero;
-				impulses = null;
-				return;
+				bool flag = false;
+				Vector3 sum = Vector3.zero;
+				// TODO: Get all touching contacts.
+				//foreach(var contact in contacts)
+				//{
+				//	Collider collider = contact.collider;
+				//	if(!Physics.ComputePenetration(
+				//		capsule, Body.position, Body.rotation,
+				//		collider, collider.transform.position, collider.transform.rotation,
+				//		out var direction, out var distance
+				//	))
+				//		continue;
+				//	sum += direction * distance;
+				//	flag = true;
+				//}
+				Body.position += sum;
+				if(!flag)
+					break;
 			}
-			truncated = desiredMovement.normalized * (hit.distance - ContactOffset);
-			desiredMovement -= truncated;
-			var collisions = DetectCollisionsOnDirection(desiredMovement);
+		}
+
+		void TruncateMovement(Vector3 desiredMovement, out Vector3 truncated, Vector3 displacement = default)
+		{
+			var collision = DetectCollision(desiredMovement, displacement);
+			if(collision != null)
+				truncated = desiredMovement.normalized * (collision.distance - ContactOffset);
+			else
+				truncated = desiredMovement;
+		}
+
+		void WallClipWithMass(Vector3 desiredMovement, float dt, out Vector3 wallClip, out OutputImpulse[] impulses)
+		{
+			var collisions = DetectContacts(desiredMovement);
 
 			if(!Profile.usePhysics)
 			{
@@ -251,80 +318,22 @@ namespace Nianyi.UnityPack
 			}
 		}
 
-		#region Contact
-		float ContactOffset => capsule.contactOffset;
-
-		class CollisionInfo
+		struct OutputImpulse
 		{
-			public Vector3 position;
-			public Vector3 normal;
-			public float distance;
-
-			public Collider collider;
 			public Rigidbody rigidbody;
-
-			public bool isGround;
-			public bool isStatic;
-
-			public float mass;
+			public Vector3 position;
+			public Vector3 impulse;
 		}
 
-		CollisionInfo CreateCollision(RaycastHit hit)
+		void ApplyImpulses(IEnumerable<OutputImpulse> impulses)
 		{
-			Collider collider = hit.collider;
-			if(collider == null || collider == capsule)
-				return null;
-			CollisionInfo contact = new()
+			if(impulses == null)
+				return;
+			foreach(var impulse in impulses)
 			{
-				position = hit.point,
-				normal = hit.normal,
-				collider = collider,
-				distance = hit.distance,
-			};
-			contact.isGround = Vector3.Angle(contact.normal, Vector3.up) <= Profile.maxMovingSlope;
-			contact.isStatic = !contact.collider.TryGetComponent(out contact.rigidbody);
-			contact.mass = contact.isStatic ? Mathf.Infinity : contact.rigidbody.mass;
-			return contact;
-		}
-
-		CollisionInfo[] DetectCollisions(Vector3 path, Vector3 displacement = default)
-		{
-			PhysicsUtility.GetCapsuleCenters(capsule, out var topCenter, out var bottomCenter);
-
-			IEnumerable<RaycastHit> hits = Physics.CapsuleCastAll(
-				topCenter + displacement, bottomCenter + displacement,
-				capsule.radius - ContactOffset, path,
-				path.magnitude + ContactOffset
-			).Where(hit => !(hit.point == default && hit.distance == 0f));
-
-			return hits.Select(CreateCollision).Where(x => x != null).ToArray();
-		}
-		CollisionInfo[] DetectCollisionsOnDirection(Vector3 direction, float depth) => DetectCollisions(direction.normalized * depth);
-		CollisionInfo[] DetectCollisionsOnDirection(Vector3 direction) => DetectCollisionsOnDirection(direction, ContactOffset * 2);
-
-		void ResolveCollision()
-		{
-			const int maxRound = 2;
-			for(int i = 0; i < maxRound; ++i)
-			{
-				bool flag = false;
-				Vector3 sum = Vector3.zero;
-				// TODO: Get all touching contacts.
-				//foreach(var contact in contacts)
-				//{
-				//	Collider collider = contact.collider;
-				//	if(!Physics.ComputePenetration(
-				//		capsule, Body.position, Body.rotation,
-				//		collider, collider.transform.position, collider.transform.rotation,
-				//		out var direction, out var distance
-				//	))
-				//		continue;
-				//	sum += direction * distance;
-				//	flag = true;
-				//}
-				Body.position += sum;
-				if(!flag)
-					break;
+				if(!impulse.rigidbody)
+					continue;
+				impulse.rigidbody.AddForceAtPosition(impulse.impulse, impulse.position, ForceMode.Impulse);
 			}
 		}
 		#endregion
@@ -335,7 +344,7 @@ namespace Nianyi.UnityPack
 
 		void UpdateGroundedState()
 		{
-			var collisions = DetectCollisionsOnDirection(Physics.gravity);
+			var collisions = DetectContacts(Physics.gravity);
 			IsGrounded = collisions.Any(c => c.isGround);
 			if(IsGrounded)
 			{
@@ -358,7 +367,9 @@ namespace Nianyi.UnityPack
 			const int maxStep = 4;
 			for(int i = 0; i < maxStep; ++i)
 			{
-				TruncateMovement(desiredDy, dt, out var step, out desiredDy, out var impulses);
+				TruncateMovement(desiredDy, out var step);
+				desiredDy -= step;
+				WallClipWithMass(desiredDy, dt, out desiredDy, out var impulses);
 				ApplyImpulses(impulses);
 				Body.position += step;
 			}
@@ -393,7 +404,7 @@ namespace Nianyi.UnityPack
 				// Boost the movement according to ground slope.
 				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
 
-				if(CheckForStaircaseStepping(movement, in dt, out var steppingHeight))
+				if(CheckForStaircaseStepping(movement, out var steppingHeight))
 					Jump_Internal(steppingHeight);
 			}
 
@@ -401,7 +412,9 @@ namespace Nianyi.UnityPack
 			const int maxStep = 4;
 			for(int i = 0; i < maxStep && movement.magnitude >= ContactOffset; ++i)
 			{
-				TruncateMovement(movement, dt, out var step, out movement, out var impulses);
+				TruncateMovement(movement, out var step);
+				movement -= step;
+				WallClipWithMass(movement, dt, out movement, out var impulses);
 
 				if(!IsGrounded)
 				{
@@ -414,20 +427,25 @@ namespace Nianyi.UnityPack
 			}
 		}
 
-		bool CheckForStaircaseStepping(Vector3 movement, in float dt, out float height)
+		bool CheckForStaircaseStepping(Vector3 movement, out float height)
 		{
 			height = default;
 			Vector3 horizontalMovement = Vector3.ProjectOnPlane(movement, Physics.gravity);
 			if(horizontalMovement.magnitude < ContactOffset)
 				return false;
 			movement = horizontalMovement.normalized * (capsule.radius * 2);
-			Vector3 originalPosition = Body.position;
 			Vector3 upward = -Physics.gravity.normalized;
 
+			// Zeroth detection: See if running into wall.
+			var upfrontCollision = DetectCollision(movement);
+			if(upfrontCollision == null || upfrontCollision.isGround)
+				return false;
+
 			// First detection: Decides the height.
-			Body.position += upward * Profile.maxStepHeight + movement.normalized * -ContactOffset;
-			TruncateMovement(movement, dt, out movement, out _, out _);
-			Body.position = originalPosition;
+			TruncateMovement(
+				movement, out movement,
+				upward * Profile.maxStepHeight + movement.normalized * -ContactOffset
+			);
 			if(!GetStaircaseHeight(movement, out height))
 				return false;
 
@@ -457,6 +475,8 @@ namespace Nianyi.UnityPack
 				return false;
 
 			var highest = groundContacts.Aggregate((a, b) => Vector3.Dot(a.position - b.position, upward) > 0 ? a : b);
+			if(!highest.isGround)
+				return false;
 			height = Vector3.Dot(highest.position - Body.position, upward);
 			if(height <= ContactOffset)
 				return false;
