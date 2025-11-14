@@ -89,6 +89,7 @@ namespace Nianyi.UnityPack
 			ApplyProfile();
 
 			desiredRotation = Orientation;
+			lastPosition = Body.position;
 		}
 
 		void Update()
@@ -104,11 +105,10 @@ namespace Nianyi.UnityPack
 
 		void FixedUpdate()
 		{
+			lastPosition = Body.position;
 			float dt = Time.fixedDeltaTime;
-
 			if(dt > 0)
 			{
-				Vector3 startingPosition = Body.position;
 				UpdateGroundedState(dt);
 				ProcessJump(dt);
 				ProcessMovement(dt);
@@ -116,7 +116,7 @@ namespace Nianyi.UnityPack
 				ProcessGravity(dt);
 				ResolveCollision();
 				ProcessBufferedVelocityChange(dt);
-				Velocity = (Body.position - startingPosition) / dt;
+				Velocity = Velocity_Internal;
 			}
 		}
 
@@ -395,7 +395,9 @@ namespace Nianyi.UnityPack
 		public float MovementSpeed => Profile.movementSpeed;
 
 		Vector3 desiredVelocity;
-		public Vector3 Velocity { get; private set; }
+		Vector3 lastPosition;
+		Vector3 Velocity_Internal => (Body.position - lastPosition) / Time.fixedDeltaTime;
+		public Vector3 Velocity { get; set; }
 
 		public bool IsActivelyMoving => desiredVelocity.sqrMagnitude > 0 && Velocity.sqrMagnitude > 0;
 
