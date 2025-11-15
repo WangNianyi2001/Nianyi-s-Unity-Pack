@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEditor;
 
-namespace Nianyi.UnityPack
+namespace Nianyi.UnityPack.Editor
 {
 	[CustomPropertyDrawer(typeof(ConditionalShowingAttribute))]
 	public class ConditionalShowingAttributeDrawer : PropertyDrawer

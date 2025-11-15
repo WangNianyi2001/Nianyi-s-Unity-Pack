@@ -1,6 +1,6 @@
 {
     "name": "wangnianyi2001.unity-pack.base.Editor",
-    "rootNamespace": "Nianyi.UnityPack",
+    "rootNamespace": "Nianyi.UnityPack.Editor",
     "references": [
         "GUID:d9b92547380df39428cf2d6a1a87be90"
     ],

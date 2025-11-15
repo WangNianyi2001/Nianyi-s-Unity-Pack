@@ -6,13 +6,12 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 
 #if UNITY_EDITOR
-using UnityEngine;
 using UnityEditor;
 #endif
 
 namespace Nianyi.UnityPack
 {
-	public partial class MemberAccessor
+	public class MemberAccessor
 	{
 		struct MatchPattern
 		{
@@ -53,7 +52,7 @@ namespace Nianyi.UnityPack
 			return paths;
 		}
 
-		public struct Step
+		struct Step
 		{
 			public enum Type { None, Member, Index }
 			public Type type;
@@ -120,7 +119,8 @@ namespace Nianyi.UnityPack
 								return (T)field.GetValue(from);
 							case PropertyInfo property:
 								return (T)property.GetValue(from);
-						};
+						}
+						;
 						break;
 				}
 				throw new MemberAccessException($"Invalid accessor path step: {member}");
@@ -145,8 +145,10 @@ namespace Nianyi.UnityPack
 							case PropertyInfo property:
 								property.SetValue(from, value);
 								break;
-						};
-						throw new MemberAccessException($"Cannot find member {member} in {type.Name}");
+						}
+						return;
+					default:
+						throw new NotSupportedException();
 				}
 			}
 
@@ -160,8 +162,8 @@ namespace Nianyi.UnityPack
 				};
 			}
 		}
-		public readonly object root;
-		public readonly Step[] path;
+		readonly object root;
+		readonly Step[] path;
 
 		MemberAccessor(object root, IEnumerable<Step> path)
 		{
@@ -187,10 +189,30 @@ namespace Nianyi.UnityPack
 				target = path[i].Get<object>(target);
 			return target;
 		}
-		public T Get<T>()
-			=> path.Last().Get<T>(Last());
-		public void Set<T>(T value)
-			=> path.Last().Set<T>(Last(), value);
+		public T Get<T>() => Get_Internal<T>(root, path);
+		static T Get_Internal<T>(object root, IEnumerable<Step> path)
+		{
+			if(path.Count() <= 0)
+				return (T)root;
+			return Get_Internal<T>(path.First().Get<object>(root), path.Skip(1));
+		}
+
+		public void Set<T>(T value) => Set_Internal(root, path, value);
+		static void Set_Internal<T>(object root, IEnumerable<Step> path, T value)
+		{
+			int count = path.Count();
+			if(count <= 0)
+				throw new ArgumentOutOfRangeException($"Value must be set on a non-empty property path.");
+			Step firstStep = path.First();
+			if(count == 1)
+			{
+				firstStep.Set(root, value);
+				return;
+			}
+			object first = firstStep.Get<object>(root);
+			Set_Internal(first, path.Skip(1), value);
+			firstStep.Set(root, first);  // Prevent action lost on non-managed fields.
+		}
 
 		public MemberAccessor Navigate(string forward) => Navigate(0, forward);
 		public MemberAccessor Navigate(int backard, string forward = "")
