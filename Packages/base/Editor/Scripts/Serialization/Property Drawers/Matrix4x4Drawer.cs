@@ -13,7 +13,7 @@ namespace Nianyi.UnityPack.Editor
 
 		public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
 		{
-			return EditorGUIUtility.singleLineHeight * (d + 1) + EditorGUIUtility.standardVerticalSpacing * d;
+			return EditorGUIUtility.singleLineHeight * (d + 1) + EditorGUIUtility.standardVerticalSpacing * (d + 1);
 		}
 
 		public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -42,14 +42,29 @@ namespace Nianyi.UnityPack.Editor
 							}, label);
 						}
 						else  // Row headers.
-							EditorGUI.LabelField(cell, headers[realY].ToString());
+						{
+							EditorGUI.LabelField(cell,
+								headers[realY].ToString(),
+								new GUIStyle(GUI.skin.label)
+								{
+									alignment = TextAnchor.MiddleRight,
+								}
+							);
+						}
 						cell.width = (position.width - labelWidth) / 4 - EditorGUIUtility.standardVerticalSpacing;
 						cell.x += labelWidth;
 					}
 					else  // Rest columns.
 					{
 						if(y == 0)  // Row headers.
-							EditorGUI.LabelField(cell, headers[realX].ToString());
+						{
+							EditorGUI.LabelField(cell,
+								headers[realX].ToString(),
+								new GUIStyle(GUI.skin.label)
+								{
+									alignment = TextAnchor.LowerCenter,
+								});
+						}
 						else  // Components.
 							matrix[realY, realX] = EditorGUI.FloatField(cell, matrix[realY, realX]);
 						cell.x += cell.width;

@@ -1,0 +1,17 @@
+{
+    "name": "wangnianyi2001.unity-pack.procedural-generation.Editor",
+    "rootNamespace": "Nianyi.UnityPack",
+    "references": [
+        "GUID:d9b92547380df39428cf2d6a1a87be90",
+        "GUID:5ec2ad16d119b194bb7ed6f93777bc50"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

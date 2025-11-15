@@ -1,7 +1,6 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEditor;
 using UnityEngine;
+using UnityEditor;
+using System.Collections.Generic;
 
 namespace Nianyi.UnityPack
 {
@@ -9,7 +8,7 @@ namespace Nianyi.UnityPack
 	{
 		#region Existence
 		/// <remarks>Will create a prefab instance if <c>template</c> is a prefab asset and in edit mode.</remarks>
-		public static GameObject Instantiate(GameObject template, Transform under = null)
+		public static GameObject InstantiateGameObject(GameObject template, Transform under = null)
 		{
 #if UNITY_EDITOR
 			if(!Application.isPlaying)
@@ -22,9 +21,14 @@ namespace Nianyi.UnityPack
 		}
 
 		/// <remarks>Cannot delete assets.</remarks>
-		public static void Destroy(GameObject target)
+		public static void Destroy(Object target)
 		{
 #if UNITY_EDITOR
+			if(AssetUtility.IsAsset(target))
+			{
+				Debug.LogWarning("Cannot destroy asset!");
+				return;
+			}
 			if(!Application.isPlaying)
 			{
 				Object.DestroyImmediate(target, false);
