@@ -1,5 +1,5 @@
 {
-    "name": "nianyi-wang.unity-toolkit.character-control",
+    "name": "com.wangnianyi2001.unity-pack.procedural-generation",
     "rootNamespace": "Nianyi.UnityPack",
     "references": [
         "GUID:d9b92547380df39428cf2d6a1a87be90"
