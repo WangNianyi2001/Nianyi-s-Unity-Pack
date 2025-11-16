@@ -2,7 +2,7 @@
 #error "The Character Control requires at least one input source (the legacy Input Manager or the new Input System) to be enabled."
 #endif
 
-#if (ENABLE_LEGACY_INPUT_MANAGER && !ENABLE_INPUT_SYSTEM) || (!ENABLE_LEGACY_INPUT_MANAGER && ENABLE_INPUT_SYSTEM)
+#if(ENABLE_LEGACY_INPUT_MANAGER && !ENABLE_INPUT_SYSTEM) || (!ENABLE_LEGACY_INPUT_MANAGER && ENABLE_INPUT_SYSTEM)
 #define SINGLE_INPUT_SYSTEM
 #endif
 
@@ -13,11 +13,11 @@ using UnityEngine.InputSystem;
 
 namespace Nianyi.UnityPack
 {
-	[RequireComponent(typeof(CapsuleWanderer))]
-	public class CapsuleInput : MonoBehaviour
+	[RequireComponent(typeof(Wanderer))]
+	public class FirstPersonWandererInput : MonoBehaviour
 	{
 		#region Component references
-		CapsuleWanderer wanderer;
+		Wanderer wanderer;
 		#endregion
 
 		#region General configurations
@@ -75,7 +75,7 @@ namespace Nianyi.UnityPack
 		#region Unity life cycle
 		void Awake()
 		{
-			wanderer = GetComponent<CapsuleWanderer>();
+			wanderer = GetComponent<Wanderer>();
 		}
 
 		void Update()

@@ -1,11 +1,11 @@
+using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
 	[RequireComponent(typeof(CapsuleCollider))]
-	public class CapsuleWanderer : MonoBehaviour
+	public class CapsuleWanderer : Wanderer
 	{
 		#region Profile
 		[SerializeField] CapsuleWandererProfile profile;
@@ -60,10 +60,10 @@ namespace Nianyi.UnityPack
 #endif
 		Rigidbody rigidbody;
 
-		public Transform Body => transform;
+		public override Transform Body => transform;
 
 		[SerializeField] Transform head;
-		public Transform Head => head;
+		public override Transform Head => head;
 
 		void GetComponentReferences()
 		{
@@ -80,7 +80,7 @@ namespace Nianyi.UnityPack
 				profile = LoadDefaultProfile();
 			ApplyProfile();
 
-			desiredRotation = Orientation;
+			desiredRotation = Orientation_Interal;
 			lastPosition = Body.position;
 		}
 
@@ -97,7 +97,7 @@ namespace Nianyi.UnityPack
 				ProcessGravity(dt);
 				ResolveCollision();
 				ProcessBufferedVelocityChange(dt);
-				Velocity = Velocity_Internal;
+				velocity = Velocity_Internal;
 			}
 		}
 
@@ -108,26 +108,10 @@ namespace Nianyi.UnityPack
 			Gizmos.DrawLine(Body.position, Body.position + desiredVelocity);
 
 			Gizmos.color = Color.red;
-			Gizmos.DrawLine(Body.position, Body.position + Velocity);
+			Gizmos.DrawLine(Body.position, Body.position + velocity);
 		}
 #endif
 		#endregion
-
-		#region Physics
-		delegate void MoveTruncated_PostProcess(ref Vector3 movement, ref Vector3 step);
-		void MoveTruncated(Vector3 movement, float dt, MoveTruncated_PostProcess postProcess = null)
-		{
-			const int maxStep = 4;
-			for(int i = 0; i < maxStep && movement != Vector3.zero; ++i)
-			{
-				TruncateMovement(movement, out var step);
-				movement -= step;
-				WallClipWithMass(movement, dt, out movement, out var impulses);
-				postProcess?.Invoke(ref movement, ref step);
-				Body.position += step;
-				ApplyImpulses(impulses);
-			}
-		}
 
 		#region Collision
 		float ContactOffset => capsule.contactOffset;
@@ -261,7 +245,7 @@ namespace Nianyi.UnityPack
 						Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(collision.position,
 							target.centerOfMass, target.velocity, target.angularVelocity
 						);
-						Vector3 relativeVelocity = Velocity - targetVelocity;
+						Vector3 relativeVelocity = velocity - targetVelocity;
 						float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);
 						Vector3 impulse = mu * relativeVelocity;
 						Vector3 targetMovement = impulse * (dt / target.mass);
@@ -320,29 +304,31 @@ namespace Nianyi.UnityPack
 		}
 		#endregion
 
-		#region Gravity
-		public bool IsGrounded { get; private set; }
-		public Vector3 GroundNormal { get; private set; }
+		#region Grounding
+		bool isGrounded;
+		public override bool IsGrounded => isGrounded;
+		Vector3 groundNormal;
+		public override Vector3 GroundNormal => groundNormal;
 
-		public bool IsGrounded_Coyoted => IsGrounded || coyoteTime > 0f;
+		public override bool IsGrounded_Coyoted => isGrounded || coyoteTime > 0f;
 		float coyoteTime;
 
 		void UpdateGroundedState(float dt)
 		{
-			bool wasGrounded = IsGrounded;
+			bool wasGrounded = isGrounded;
 
 			var collisions = DetectContacts(Physics.gravity);
-			IsGrounded = collisions.Any(c => c.isGround);
-			if(IsGrounded)
+			isGrounded = collisions.Any(c => c.isGround);
+			if(isGrounded)
 			{
-				GroundNormal = collisions
+				groundNormal = collisions
 					.Where(c => c.isGround)
 					.Select(c => c.normal)
 					.Aggregate((a, b) => a + b)
 					.normalized;
 			}
 
-			if(!IsGrounded)
+			if(!isGrounded)
 			{
 				if(wasGrounded && Profile.useCoyoteTime)
 					coyoteTime = Profile.coyoteTime;
@@ -352,29 +338,26 @@ namespace Nianyi.UnityPack
 
 		void ProcessGravity(float dt)
 		{
-			if(IsGrounded)
+			if(isGrounded)
 				return;
-			Vector3 vy = Vector3.Project(Velocity, Physics.gravity);
+			Vector3 vy = Vector3.Project(velocity, Physics.gravity);
 			vy += Physics.gravity * dt;
 			MoveTruncated(vy * dt, dt);
 		}
 		#endregion
-		#endregion
 
-		#region Wander
 		#region Movement
-		public float MovementSpeed => Profile.movementSpeed;
+		public override float MovementSpeed => Profile.movementSpeed;
 
-		Vector3 desiredVelocity;
-		Vector3 lastPosition;
+		Vector3 velocity, desiredVelocity, lastPosition;
 		Vector3 Velocity_Internal => (Body.position - lastPosition) / Time.fixedDeltaTime;
-		public Vector3 Velocity { get; set; }
+		public override Vector3 Velocity => velocity;
 
-		public bool IsActivelyMoving => desiredVelocity.sqrMagnitude > 0 && Velocity.sqrMagnitude > 0;
+		public override bool IsActivelyMoving => desiredVelocity.sqrMagnitude > 0 && velocity.sqrMagnitude > 0;
 
-		public void MoveByVelocity(Vector3 worldVelocity)
+		public override void MoveByVelocity(Vector3 velocity)
 		{
-			desiredVelocity = worldVelocity;
+			desiredVelocity = velocity;
 		}
 
 		void ProcessMovement(float dt)
@@ -385,16 +368,16 @@ namespace Nianyi.UnityPack
 				movement = desiredVelocity * dt;
 			else
 			{
-				Vector3 planarVelocity = Vector3.ProjectOnPlane(Velocity, Physics.gravity);
+				Vector3 planarVelocity = Vector3.ProjectOnPlane(velocity, Physics.gravity);
 				float acceleration = Vector3.Distance(planarVelocity, desiredVelocity);
 				float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
 				movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
 			}
 
-			if(IsGrounded)
+			if(isGrounded)
 			{
 				// Boost the movement according to ground slope.
-				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
+				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, groundNormal).normalized * movement.magnitude, Physics.gravity);
 			}
 
 			if(IsGrounded_Coyoted)
@@ -408,7 +391,7 @@ namespace Nianyi.UnityPack
 
 		void MovementPostProcess(ref Vector3 movement, ref Vector3 step)
 		{
-			if(IsGrounded)
+			if(isGrounded)
 				return;
 			step.y = Mathf.Min(0, step.y); // TODO: Use gravity.
 			movement = Vector3.ProjectOnPlane(movement, Physics.gravity);
@@ -438,12 +421,12 @@ namespace Nianyi.UnityPack
 
 			// Second detection: Decides the distance.
 			float t = Mathf.Sqrt(2f * height / Physics.gravity.magnitude);
-			movement = Vector3.ProjectOnPlane(Velocity, Physics.gravity) * t;
+			movement = Vector3.ProjectOnPlane(velocity, Physics.gravity) * t;
 			if(!GetStaircaseHeight(movement, out height))
 				return false;
 
 			// Check for elevated slope bad cases.
-			Vector3 estimatedSlopeMovement = movement - Vector3.Dot(movement, GroundNormal) / Vector3.Dot(GroundNormal, Physics.gravity) * Physics.gravity;
+			Vector3 estimatedSlopeMovement = movement - Vector3.Dot(movement, groundNormal) / Vector3.Dot(groundNormal, Physics.gravity) * Physics.gravity;
 			if(height - estimatedSlopeMovement.y <= ContactOffset * 3)
 				return false;
 
@@ -469,13 +452,29 @@ namespace Nianyi.UnityPack
 				return false;
 			return true;
 		}
+
+		delegate void MoveTruncated_PostProcess(ref Vector3 movement, ref Vector3 step);
+		void MoveTruncated(Vector3 movement, float dt, MoveTruncated_PostProcess postProcess = null)
+		{
+			const int maxStep = 4;
+			for(int i = 0; i < maxStep && movement != Vector3.zero; ++i)
+			{
+				TruncateMovement(movement, out var step);
+				movement -= step;
+				WallClipWithMass(movement, dt, out movement, out var impulses);
+				postProcess?.Invoke(ref movement, ref step);
+				Body.position += step;
+				ApplyImpulses(impulses);
+			}
+		}
 		#endregion
 
 		#region Orientation
-		public Vector3 Orientation
+		public override Vector3 Orientation => Orientation_Interal;
+		Vector3 Orientation_Interal
 		{
 			get => Head.eulerAngles;
-			private set
+			set
 			{
 				Body.eulerAngles = new(0, value.y, 0);
 				Head.localEulerAngles = new(value.x, 0, 0);
@@ -484,12 +483,12 @@ namespace Nianyi.UnityPack
 
 		Vector3 desiredRotation;
 
-		public void OrientByDelta(Vector3 delta)
+		public override void OrientByDelta(Vector3 delta)
 		{
 			desiredRotation += delta;
 		}
 
-		public void ProcessOrientation(float dt)
+		void ProcessOrientation(float dt)
 		{
 			Vector3 rotation;
 			if(!Profile.useSmoothOrientation)
@@ -504,14 +503,14 @@ namespace Nianyi.UnityPack
 				desiredRotation *= 1 - t;
 			}
 
-			Orientation = Orientation.RotateEulerWithZenithClamped(rotation, Profile.zenithLimit);
+			Orientation_Interal = Orientation_Interal.RotateEulerWithZenithClamped(rotation, Profile.zenithLimit);
 		}
 		#endregion
 
 		#region Jumping
 		float inputBufferTime;
 
-		public void Jump()
+		public override void Jump()
 		{
 			inputBufferTime = Profile.inputBufferTime;
 		}
@@ -522,9 +521,9 @@ namespace Nianyi.UnityPack
 				return;
 			Vector3 upDirection = -Physics.gravity.normalized;
 			float desiredVy = Mathf.Sqrt(2 * height * Physics.gravity.magnitude);
-			if(Vector3.Dot(Velocity, upDirection) >= desiredVy)
+			if(Vector3.Dot(velocity, upDirection) >= desiredVy)
 				return;
-			bufferedVelocityChange += upDirection * desiredVy - Vector3.Project(Velocity, upDirection);
+			bufferedVelocityChange += upDirection * desiredVy - Vector3.Project(velocity, upDirection);
 		}
 
 		void ProcessJump(float dt)
@@ -536,7 +535,6 @@ namespace Nianyi.UnityPack
 				return;
 			Jump_Internal(Profile.jumpHeight);
 		}
-		#endregion
 		#endregion
 	}
 }

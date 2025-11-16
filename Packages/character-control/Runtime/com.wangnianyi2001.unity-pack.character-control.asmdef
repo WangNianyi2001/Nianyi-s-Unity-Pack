@@ -1,5 +1,5 @@
 {
-    "name": "com.nianyi-wang.unity-toolkit.character-control",
+    "name": "com.wangnianyi2001.unity-pack.character-control",
     "rootNamespace": "Nianyi.UnityPack",
     "references": [
         "com.wangnianyi2001.unity-pack.base",
