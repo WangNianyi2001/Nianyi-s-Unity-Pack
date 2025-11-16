@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
-	[ExecuteAlways]
 	[RequireComponent(typeof(CapsuleCollider))]
 	public class CapsuleWanderer : MonoBehaviour
 	{
@@ -75,13 +74,6 @@ namespace Nianyi.UnityPack
 		#region Life cycle
 		void Awake()
 		{
-#if UNITY_EDITOR
-			if(SceneUtility.IsEditing)
-			{
-				EditorUpdate();
-				return;
-			}
-#endif
 			GetComponentReferences();
 
 			if(Profile == null)
@@ -90,17 +82,6 @@ namespace Nianyi.UnityPack
 
 			desiredRotation = Orientation;
 			lastPosition = Body.position;
-		}
-
-		void Update()
-		{
-#if UNITY_EDITOR
-			if(SceneUtility.IsEditing)
-			{
-				EditorUpdate();
-				return;
-			}
-#endif
 		}
 
 		void FixedUpdate()
@@ -121,12 +102,6 @@ namespace Nianyi.UnityPack
 		}
 
 #if UNITY_EDITOR
-		void EditorUpdate()
-		{
-			GetComponentReferences();
-			ApplyProfile();
-		}
-
 		void OnDrawGizmos()
 		{
 			Gizmos.color = Color.yellow;
@@ -139,23 +114,19 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Physics
-		Vector3 bufferedVelocityChange;
-
-		void ProcessBufferedVelocityChange(float dt)
+		delegate void MoveTruncated_PostProcess(ref Vector3 movement, ref Vector3 step);
+		void MoveTruncated(Vector3 movement, float dt, MoveTruncated_PostProcess postProcess = null)
 		{
-			Vector3 desiredMovement = bufferedVelocityChange * dt;
 			const int maxStep = 4;
-			for(int i = 0; i < maxStep; ++i)
+			for(int i = 0; i < maxStep && movement != Vector3.zero; ++i)
 			{
-				if(desiredMovement.magnitude < ContactOffset)
-					break;
-				TruncateMovement(desiredMovement, out var step);
-				desiredMovement -= step;
-				WallClipWithMass(desiredMovement, dt, out desiredMovement, out var impulses);
-				ApplyImpulses(impulses);
+				TruncateMovement(movement, out var step);
+				movement -= step;
+				WallClipWithMass(movement, dt, out movement, out var impulses);
+				postProcess?.Invoke(ref movement, ref step);
 				Body.position += step;
+				ApplyImpulses(impulses);
 			}
-			bufferedVelocityChange = Vector3.zero;
 		}
 
 		#region Collision
@@ -339,6 +310,16 @@ namespace Nianyi.UnityPack
 		}
 		#endregion
 
+		#region Velocity buffer
+		Vector3 bufferedVelocityChange;
+
+		void ProcessBufferedVelocityChange(float dt)
+		{
+			MoveTruncated(bufferedVelocityChange * dt, dt);
+			bufferedVelocityChange = Vector3.zero;
+		}
+		#endregion
+
 		#region Gravity
 		public bool IsGrounded { get; private set; }
 		public Vector3 GroundNormal { get; private set; }
@@ -375,17 +356,7 @@ namespace Nianyi.UnityPack
 				return;
 			Vector3 vy = Vector3.Project(Velocity, Physics.gravity);
 			vy += Physics.gravity * dt;
-			Vector3 desiredDy = vy * dt;
-
-			const int maxStep = 4;
-			for(int i = 0; i < maxStep; ++i)
-			{
-				TruncateMovement(desiredDy, out var step);
-				desiredDy -= step;
-				WallClipWithMass(desiredDy, dt, out desiredDy, out var impulses);
-				ApplyImpulses(impulses);
-				Body.position += step;
-			}
+			MoveTruncated(vy * dt, dt);
 		}
 		#endregion
 		#endregion
@@ -409,40 +380,38 @@ namespace Nianyi.UnityPack
 		void ProcessMovement(float dt)
 		{
 			// Calculate estimated movement.
-			Vector3 planarVelocity = Vector3.ProjectOnPlane(Velocity, Physics.gravity);
-			float acceleration = Vector3.Distance(planarVelocity, desiredVelocity);
-			float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
-			Vector3 movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
+			Vector3 movement;
+			if(!Profile.useAcceleration)
+				movement = desiredVelocity * dt;
+			else
+			{
+				Vector3 planarVelocity = Vector3.ProjectOnPlane(Velocity, Physics.gravity);
+				float acceleration = Vector3.Distance(planarVelocity, desiredVelocity);
+				float t = Mathf.Clamp01(Profile.acceleration * dt / acceleration);
+				movement = Vector3.Lerp(planarVelocity, desiredVelocity, t) * dt;
+			}
 
 			if(IsGrounded)
 			{
 				// Boost the movement according to ground slope.
 				movement += Vector3.Project(Vector3.ProjectOnPlane(movement, GroundNormal).normalized * movement.magnitude, Physics.gravity);
-
 			}
+
 			if(IsGrounded_Coyoted)
 			{
 				if(CheckForStaircaseStepping(movement, out var steppingHeight))
 					Jump_Internal(steppingHeight);
 			}
 
-			// Truncate movement based on wall sliding.
-			const int maxStep = 4;
-			for(int i = 0; i < maxStep && movement.magnitude >= ContactOffset; ++i)
-			{
-				TruncateMovement(movement, out var step);
-				movement -= step;
-				WallClipWithMass(movement, dt, out movement, out var impulses);
+			MoveTruncated(movement, dt, MovementPostProcess);
+		}
 
-				if(!IsGrounded)
-				{
-					step.y = Mathf.Min(0, step.y); // TODO: Use gravity.
-					movement = Vector3.ProjectOnPlane(movement, Physics.gravity);
-				}
-
-				Body.position += step;
-				ApplyImpulses(impulses);
-			}
+		void MovementPostProcess(ref Vector3 movement, ref Vector3 step)
+		{
+			if(IsGrounded)
+				return;
+			step.y = Mathf.Min(0, step.y); // TODO: Use gravity.
+			movement = Vector3.ProjectOnPlane(movement, Physics.gravity);
 		}
 
 		bool CheckForStaircaseStepping(Vector3 movement, out float height)

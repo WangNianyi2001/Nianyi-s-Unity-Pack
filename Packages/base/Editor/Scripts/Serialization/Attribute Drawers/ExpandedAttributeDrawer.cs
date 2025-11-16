@@ -50,7 +50,7 @@ namespace Nianyi.UnityPack.Editor
 			{
 				do
 				{
-					sum += EditorGUIUtility.standardVerticalSpacing + EditorGUI.GetPropertyHeight(it, label);
+					sum += EditorGUIUtility.standardVerticalSpacing + EditorGUI.GetPropertyHeight(it, label, true);
 				}
 				while(it.NextVisible(false) && !SerializedProperty.EqualContents(it, end));
 			}
@@ -88,7 +88,7 @@ namespace Nianyi.UnityPack.Editor
 					{
 						position.y += EditorGUIUtility.standardVerticalSpacing;
 						position.height = (float)EditorGUI.GetPropertyHeight(it, label);
-						EditorGUI.PropertyField(position, it);
+						EditorGUI.PropertyField(position, it, true);
 						position.y += position.height;
 					}
 					while(it.NextVisible(false) && !SerializedProperty.EqualContents(it, end));

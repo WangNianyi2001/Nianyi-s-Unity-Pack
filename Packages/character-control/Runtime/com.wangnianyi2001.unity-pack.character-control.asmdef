@@ -2,7 +2,8 @@
     "name": "com.nianyi-wang.unity-toolkit.character-control",
     "rootNamespace": "Nianyi.UnityPack",
     "references": [
-        "GUID:d9b92547380df39428cf2d6a1a87be90"
+        "com.wangnianyi2001.unity-pack.base",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

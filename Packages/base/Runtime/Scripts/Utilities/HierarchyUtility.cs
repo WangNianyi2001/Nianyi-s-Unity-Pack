@@ -103,7 +103,7 @@ namespace Nianyi.UnityPack
 				if(!component)
 					return false;
 			}
-			Object.Destroy(component);
+			Destroy(component);
 			component = null;
 			return true;
 		}
