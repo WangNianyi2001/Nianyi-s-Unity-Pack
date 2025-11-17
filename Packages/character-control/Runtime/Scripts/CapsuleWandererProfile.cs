@@ -20,7 +20,7 @@ namespace Nianyi.UnityPack
 
 		public bool usePhysics = true;
 
-		[HideWhen("usePhysics", false)]
+		[HideWhen(nameof(usePhysics), false)]
 		[Min(0)] public float mass = 1f;
 		#endregion
 
@@ -33,7 +33,7 @@ namespace Nianyi.UnityPack
 		public bool useAcceleration = true;
 
 		[Tooltip("Meters per square second.")]
-		[HideWhen("useAcceleration", false)]
+		[HideWhen(nameof(useAcceleration), false)]
 		[Min(0)] public float acceleration = 30f;
 
 		[Range(0, 90)] public float maxMovingSlope = 30f;
@@ -47,7 +47,7 @@ namespace Nianyi.UnityPack
 		public bool useOrientationSpeedCap = false;
 
 		[Tooltip("Degrees per second.")]
-		[HideWhen("useOrientationSpeedCap", false)]
+		[HideWhen(nameof(useOrientationSpeedCap), false)]
 		[Min(0)] public float orientaionSpeed = 360f;
 
 		[Range(0, 90)] public float zenithLimit = 90f;
@@ -55,7 +55,7 @@ namespace Nianyi.UnityPack
 		public bool useSmoothOrientation = true;
 
 		[Tooltip("Ratio per second.")]
-		[HideWhen("useSmoothOrientation", false)]
+		[HideWhen(nameof(useSmoothOrientation), false)]
 		[Min(1)] public float smoothOrientationCoefficient = 10f;
 		#endregion
 
@@ -64,20 +64,20 @@ namespace Nianyi.UnityPack
 
 		public bool enableJumping = true;
 
-		[HideWhen("enableJumping", false)]
+		[HideWhen(nameof(enableJumping), false)]
 		[Min(0)] public float jumpHeight = 1.2f;
 
-		[HideWhen("enableJumping", false)]
+		[HideWhen(nameof(enableJumping), false)]
 		public bool useCoyoteTime = true;
 
-		[HideWhen("enableJumping", false)]
-		[HideWhen("useCoyoteTime", false)]
+		[HideWhen(nameof(enableJumping), false)]
+		[HideWhen(nameof(useCoyoteTime), false)]
 		[Min(0)] public float coyoteTime = 0.2f;
 
-		[HideWhen("enableJumping", false)]
+		[HideWhen(nameof(enableJumping), false)]
 		public bool useInputBuffer = true;
-		[HideWhen("enableJumping", false)]
-		[HideWhen("useInputBuffer", false)]
+		[HideWhen(nameof(enableJumping), false)]
+		[HideWhen(nameof(useInputBuffer), false)]
 		[Min(0)] public float inputBufferTime = 0.2f;
 		#endregion
 	}

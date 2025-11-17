@@ -49,8 +49,8 @@ namespace Nianyi.UnityPack
 			public string Jump = "Jump";
 		}
 		[
-			ShowWhen("inputSource", InputSource.LegacyInputManager),
-			ShowWhen("inputSource", InputSource.Auto),
+			ShowWhen(nameof(inputSource), InputSource.LegacyInputManager),
+			ShowWhen(nameof(inputSource), InputSource.Auto),
 			Expanded
 		]
 		public LegacyInputManagerConfig legacyInputManagerConfig = new();
@@ -64,8 +64,8 @@ namespace Nianyi.UnityPack
 			public string inputActionMap;
 		}
 		[
-			ShowWhen("inputSource", InputSource.InputSystem),
-			ShowWhen("inputSource", InputSource.Auto),
+			ShowWhen(nameof(inputSource), InputSource.InputSystem),
+			ShowWhen(nameof(inputSource), InputSource.Auto),
 			Expanded
 		]
 		public InputSystemConfig inputSystemConfig = new();

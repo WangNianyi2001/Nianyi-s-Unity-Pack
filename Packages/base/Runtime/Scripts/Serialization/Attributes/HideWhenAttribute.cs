@@ -9,6 +9,8 @@ namespace Nianyi.UnityPack
 		public readonly string propertyName;
 		public readonly object value;
 
+		public HideWhenAttribute(string propertyName) : this(propertyName, true) { }
+
 		public HideWhenAttribute(string propertyName, object value)
 		{
 			this.propertyName = propertyName;

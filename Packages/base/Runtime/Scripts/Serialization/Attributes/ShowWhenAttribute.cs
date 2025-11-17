@@ -9,6 +9,8 @@ namespace Nianyi.UnityPack
 		public readonly string propertyName;
 		public readonly object value;
 
+		public ShowWhenAttribute(string propertyName) : this(propertyName, true) { }
+
 		public ShowWhenAttribute(string propertyName, object value)
 		{
 			this.propertyName = propertyName;
