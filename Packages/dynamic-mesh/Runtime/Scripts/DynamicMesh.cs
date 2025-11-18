@@ -1,75 +1,79 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Nianyi.UnityPack
 {
 	public partial class DynamicMesh
 	{
-		private struct MinMaxRange<T>
-		{
-			public T min, max;
+		#region Configurations
+		public int usedUvChannelCount = 0;
+		#endregion
 
-			public MinMaxRange(T min, T max)
+		#region Creation
+		public DynamicMesh() { }
+
+		public DynamicMesh(DynamicMesh source)
+		{
+			Join(source);
+		}
+
+		public DynamicMesh Duplicate()
+		{
+			return new(this);
+		}
+		#endregion
+
+		#region Export
+		public Mesh ToMesh(bool recalculateNormals = false)
+		{
+			DynamicMesh triangulated = Duplicate();
+			triangulated.Triangularize();
+
+			string[] materials = triangulated.faces.Select(f => f.material).Distinct().ToArray();
+			Dictionary<string, int> materialIndexMap = new(materials.Length);
+			List<int>[] submeshIndices = new List<int>[materials.Length];
+			for(int i = 0; i < materials.Length; ++i)
 			{
-				this.min = min;
-				this.max = max;
+				materialIndexMap.Add(materials[i], i);
+				submeshIndices[i] = new();
 			}
 
-			public MinMaxRange(MinMaxRange<T> range) : this(range.min, range.max) { }
-		}
-		private MinMaxRange<Vector3> range;
-
-		public readonly List<UnityDcel> submeshes = new();
-
-		public Vector3 Size => new(
-			Mathf.Abs(range.max[0] - range.min[0]),
-			Mathf.Abs(range.max[1] - range.min[1]),
-			Mathf.Abs(range.max[2] - range.min[2])
-		);
-
-		public int VertexCount
-		{
-			get
+			Corner[] corners = triangulated.faces.SelectMany(f => f.Corners).ToArray();
+			Dictionary<Corner, int> cornerIndexMap = new(corners.Length);
+			for(int i = 0; i < corners.Length; ++i)
+				cornerIndexMap.Add(corners[i], i);
+			foreach(var f in triangulated.faces)
 			{
-				int count = 0;
-				foreach(var submesh in submeshes)
-					count += submesh.VertexCount;
-				return count;
+				int submeshIndex = materialIndexMap[f.material];
+				foreach(var c in f.Corners)
+					submeshIndices[submeshIndex].Add(cornerIndexMap[c]);
 			}
-		}
-		public IEnumerable<UnityDcel.Vertex> Vertices
-		{
-			get
+
+			Mesh mesh = new();
+
+			mesh.SetVertices(corners.Select(c => c.vertex.position).ToList());
+			mesh.SetNormals(corners.Select(c => c.normal).ToList());
+			for(int i = 0; i < usedUvChannelCount; ++i)
 			{
-				foreach(var submesh in submeshes)
+				mesh.SetUVs(i, corners.Select(c =>
 				{
-					foreach(var vertex in submesh.vertices)
-						yield return vertex;
-				}
+					if(c.uv != null & c.uv.Length > i)
+						return c.uv[i];
+					return default;
+				}).ToList());
 			}
-		}
 
-		public int SurfaceCount
-		{
-			get
-			{
-				int count = 0;
-				foreach(var submesh in submeshes)
-					count += submesh.SurfaceCount;
-				return count;
-			}
-		}
+			mesh.subMeshCount = materials.Length;
+			for(int i = 0; i < materials.Length; ++i)
+				mesh.SetIndices(submeshIndices[i], MeshTopology.Triangles, i);
 
-		public Mesh ToMesh(string name)
-		{
-			if(submeshes == null)
-				return null;
-
-			Mesh mesh = new() { name = name };
-			for(int i = 0; i < submeshes.Count; ++i)
-				submeshes[i].WriteToMesh(mesh, i);
+			if(recalculateNormals)
+				mesh.RecalculateNormals();
+			mesh.RecalculateBounds();
 
 			return mesh;
 		}
+		#endregion
 	}
 }
