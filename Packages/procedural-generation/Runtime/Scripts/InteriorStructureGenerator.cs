@@ -4,41 +4,6 @@ using System.Linq;
 
 namespace Nianyi.UnityPack
 {
-	[System.Serializable]
-	public class InteriorStructure
-	{
-		public List<Vertex> vertices;
-		public List<Wall> walls;
-		public List<Room> rooms;
-
-		[System.Serializable]
-		public class Room
-		{
-			public List<int> wallIndices;
-		}
-
-		[System.Serializable]
-		public class Wall
-		{
-			public End from, to;
-			public bool fill = true;
-
-			[System.Serializable]
-			public class End
-			{
-				public int vertexIndex;
-				public float height = 3f;
-				public float thickness = 0.1f;
-			}
-		}
-
-		[System.Serializable]
-		public class Vertex
-		{
-			public Vector3 position;
-		}
-	}
-
 	[RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 	public class InteriorStructureGenerator : ProceduralGenerator
 	{
@@ -85,17 +50,16 @@ namespace Nianyi.UnityPack
 
 		void GenerateRoomCeilingAndFloor(DynamicMesh mesh, InteriorStructure.Room room)
 		{
-			var vertices = room.wallIndices
-				.Select(i => config.walls[i].from.vertexIndex)
-				.Select(i => config.vertices[i].position)
-				.Select(p => mesh.CreateVertex(p))
-				.ToArray();
+			var floor = mesh.CreateFace(room.walls.Select(w => mesh.CreateVertex(w.from.vertex.position)));
 
-			var floor = mesh.CreateFace(vertices);
-
-			var ceiling = mesh.DuplicateFaces(floor);
+			var ceiling = mesh.CreateFace(room.walls
+				.Select(w => new DynamicMesh.Vertex[2] {
+					mesh.CreateVertex(w.from.vertex.position + Vector3.up * w.from.height),
+					mesh.CreateVertex(w.to.vertex.position + Vector3.up * w.to.height),
+				})
+				.SelectMany(x => x)
+			);
 			mesh.InvertNormals(ceiling);
-			mesh.TranslateVertices(Vector3.up * 3f, ceiling.GetVertices());
 		}
 		#endregion
 	}

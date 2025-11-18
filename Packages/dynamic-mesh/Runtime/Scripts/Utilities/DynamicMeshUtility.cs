@@ -13,5 +13,10 @@ namespace Nianyi.UnityPack
 		{
 			return faces.SelectMany(f => f.Vertices).ToArray();
 		}
+
+		public static Vertex[] GetVertices(this Face f)
+		{
+			return f.Vertices.ToArray();
+		}
 	}
 }
