@@ -12,9 +12,10 @@ namespace Nianyi.UnityPack
 		public Vector3Int count = Vector3Int.one;
 	}
 
-	public class PrefabArray : ProceduralGenerator<PrefabArrayConfig>
+	public class PrefabArray : ProceduralGenerator
 	{
 		#region Generation
+		[SerializeField, Expanded] PrefabArrayConfig config;
 		[SerializeField, HideInInspector] List<GameObject> instances = new();
 
 		public override void Regenerate()
@@ -25,6 +26,11 @@ namespace Nianyi.UnityPack
 
 		void Generate()
 		{
+			if(config == null)
+				return;
+			if(config?.prefab == null)
+				return;
+
 			foreach(var index in EnumerateNaturalCoordinates(config.count))
 			{
 				Vector4 pos = (Vector3)index - Vector3.Scale(config.relativeOffset, config.count);

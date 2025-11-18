@@ -20,12 +20,14 @@ namespace Nianyi.UnityPack
 		}
 		#endregion
 
-		#region Rotation
+		#region Quaternion
 		public static Quaternion Scale(in this Quaternion quat, float t)
 		{
 			return Quaternion.SlerpUnclamped(Quaternion.identity, quat, t);
 		}
+		#endregion
 
+		#region Vector
 		/// <param name="range">In [0, 90]</param>
 		public static Vector3 RotateEulerWithZenithClamped(this Vector3 eulers, in Vector3 delta, float range = 90f)
 		{
@@ -43,6 +45,11 @@ namespace Nianyi.UnityPack
 			eulers.x = zenith;
 
 			return eulers;
+		}
+
+		public static Vector3 TransformAroundPivot(in Vector3 v, in Matrix4x4 transform, in Vector3 pivot)
+		{
+			return transform.MultiplyPoint(v - pivot) + pivot;
 		}
 		#endregion
 	}

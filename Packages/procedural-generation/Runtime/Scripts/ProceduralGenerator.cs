@@ -31,17 +31,4 @@ namespace Nianyi.UnityPack
 		public abstract void Regenerate();
 		#endregion
 	}
-
-	/// <remarks>
-	/// When <c>config</c> is modified in the editor, <c>Regenerate</c> automatically gets triggered.
-	/// In most cases you should derive from <c>ProceduralGenerator<Config></c> to get automatic regeneration.
-	/// Doesn't work well with "Project Settings/Enter Play Mode Options/Reload Scene" being turned off, as it relies on `Awake` to run.
-	/// </remarks>
-	/// <typeparam name="Config">
-	/// The data structure defining the configuration data of this generator.
-	/// </typeparam>
-	public abstract class ProceduralGenerator<Config> : ProceduralGenerator
-	{
-		[SerializeField, Expanded] protected Config config;
-	}
 }

@@ -2,7 +2,8 @@
     "name": "com.wangnianyi2001.unity-pack.procedural-generation",
     "rootNamespace": "Nianyi.UnityPack",
     "references": [
-        "GUID:d9b92547380df39428cf2d6a1a87be90"
+        "GUID:d9b92547380df39428cf2d6a1a87be90",
+        "GUID:eaec7a8a5361a3e4b9418d5252b4f9bd"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
