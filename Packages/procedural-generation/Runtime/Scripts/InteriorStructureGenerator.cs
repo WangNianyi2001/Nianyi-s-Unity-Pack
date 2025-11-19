@@ -1,6 +1,6 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace Nianyi.UnityPack
 {
@@ -19,20 +19,31 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Generation
-		[SerializeField] Material debugMaterial;
 		[SerializeField, Expanded] public InteriorStructure config;
+
+		DynamicMesh mesh;
+		Dictionary<string, Material> materialMap;
 
 		public override void NewGeneration()
 		{
 			FetchComponentReferences();
 
-			DynamicMesh mesh = new();
+			mesh = new();
+			materialMap = new()
+			{
+				["default-floor"] = config.defaultFloorMaterial,
+				["default-ceiling"] = config.defaultCeilingMaterial,
+				["default-inset"] = config.defaultInsetMaterial,
+				["default-wall"] = config.defaultWallMaterial,
+			};
 
 			foreach(var room in config.rooms)
-				GenerateRoom(mesh, room);
+				GenerateRoom(room);
 
-			meshFilter.sharedMesh = mesh.ToMesh(true);
-			meshRenderer.sharedMaterial = debugMaterial;
+			meshFilter.sharedMesh = mesh.ToMesh(out var materialSlots, true);
+			meshRenderer.sharedMaterials = materialSlots
+				.Select(name => materialMap.ContainsKey(name) ? materialMap[name] : null)
+				.ToArray();
 		}
 
 		public override void DestroyGeneration()
@@ -64,7 +75,7 @@ namespace Nianyi.UnityPack
 			public Vector3 tangent, normal;
 		}
 
-		void GenerateRoom(DynamicMesh mesh, InteriorStructure.Room room)
+		void GenerateRoom(InteriorStructure.Room room)
 		{
 			var walls = room.walls;
 			int count = walls.Count;
@@ -126,7 +137,10 @@ namespace Nianyi.UnityPack
 
 			// Generate floor.
 			if(room.generateFloor)
-				mesh.CreateFace(contexts.Select(c => c.from));
+			{
+				var floor = mesh.CreateFace(contexts.Select(c => c.from));
+				floor.material = "default-floor";
+			}
 
 			// Generate ceiling.
 			if(room.generateCeiling)
@@ -140,15 +154,16 @@ namespace Nianyi.UnityPack
 						ceilingVerts.Add(context.toTop);
 				}
 				ceilingVerts.Reverse();
-				mesh.CreateFace(ceilingVerts);
+				var ceiling = mesh.CreateFace(ceilingVerts);
+				ceiling.material = "default-ceiling";
 			}
 
 			// Generate walls.
 			foreach(var context in contexts)
-				GenerateWall(mesh, context);
+				GenerateWall(context);
 		}
 
-		void GenerateWall(DynamicMesh mesh, WallContext context)
+		void GenerateWall(WallContext context)
 		{
 			var wall = context.wall;
 			Vector3 span = wall.to.vertex.position - wall.from.vertex.position;
@@ -200,19 +215,16 @@ namespace Nianyi.UnityPack
 
 			void GenerateSolidSection(float xMin, float xMax)
 			{
-				MakeFace(xMin, xMax, 0, GetHeightAt(xMin), GetHeightAt(xMax));
+				MakeWallFace(xMin, xMax, 0, GetHeightAt(xMin), GetHeightAt(xMax));
 			}
 
 			void GenerateHoleSection(float xMin, float xMax, float yMin, float yMax)
 			{
-				MakeFace(xMin, xMax, 0, yMin, yMin);
-				MakeFace(xMin, xMax, yMax, GetHeightAt(xMin), GetHeightAt(xMax));
-
-				// Inset surfaces.
-				MakeFace(xMin, xMax, 0, yMin, yMin);
+				MakeWallFace(xMin, xMax, 0, yMin, yMin);
+				MakeWallFace(xMin, xMax, yMax, GetHeightAt(xMin), GetHeightAt(xMax));
 			}
 
-			void MakeFace(float xMin, float xMax, float yMin, float y1, float y2)
+			void MakeWallFace(float xMin, float xMax, float yMin, float y1, float y2)
 			{
 				var face = mesh.CreateFace(
 					new Vector3(xMin, yMin),
@@ -220,6 +232,7 @@ namespace Nianyi.UnityPack
 					new Vector3(xMax, y2),
 					new Vector3(xMin, y1)
 				);
+				face.material = "default-wall";
 				vertices.AddRange(face.Vertices);
 				faces.Add(face);
 			}

@@ -25,7 +25,7 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Export
-		public Mesh ToMesh(bool recalculateNormals = false)
+		public Mesh ToMesh(out string[] materialMap, bool recalculateNormals = false)
 		{
 			DynamicMesh triangulated = Duplicate();
 			triangulated.Triangularize();
@@ -72,6 +72,7 @@ namespace Nianyi.UnityPack
 				mesh.RecalculateNormals();
 			mesh.RecalculateBounds();
 
+			materialMap = materialIndexMap.Keys.ToArray();
 			return mesh;
 		}
 		#endregion

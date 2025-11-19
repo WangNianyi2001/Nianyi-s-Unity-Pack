@@ -7,6 +7,13 @@ namespace Nianyi.UnityPack
 	[System.Serializable]
 	public class InteriorStructure : ISerializationCallbackReceiver
 	{
+		[Header("Materials")]
+		public Material defaultFloorMaterial;
+		public Material defaultCeilingMaterial;
+		public Material defaultWallMaterial;
+		public Material defaultInsetMaterial;
+
+		[Header("Geometry")]
 		public List<Vertex> vertices;
 		public List<Wall> walls;
 		public List<Room> rooms;
