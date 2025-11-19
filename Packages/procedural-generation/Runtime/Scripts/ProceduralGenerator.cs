@@ -1,6 +1,4 @@
 using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
 
 namespace Nianyi.UnityPack
 {
@@ -11,24 +9,51 @@ namespace Nianyi.UnityPack
 		protected void Awake()
 		{
 #if UNITY_EDITOR
-			if(!Application.isPlaying)
+			if(!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
 			{
-				Regenerate();
+				UpdateGeneration();
 				return;
 			}
 #endif
+			UpdateGeneration();
 			Ungarrison();
 		}
+
+		protected void OnDestroy()
+		{
+#if UNITY_EDITOR
+			if(!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+			{
+				DestroyGeneration();
+				return;
+			}
+#endif
+		}
+
+#if UNITY_EDITOR
+		protected void OnValidate()
+		{
+			UnityEditor.EditorApplication.delayCall += UpdateGeneration;
+		}
+#endif
 		#endregion
 
 		#region Generation
 		public void Ungarrison()
 		{
-			Regenerate();
 			HierarchyUtility.Destroy(this);
 		}
 
-		public abstract void Regenerate();
+		public abstract void NewGeneration();
+		public abstract void DestroyGeneration();
+		/// <summary>
+		/// Should replace with incremental implementation in child classes.
+		/// </summary>
+		public virtual void UpdateGeneration()
+		{
+			DestroyGeneration();
+			NewGeneration();
+		}
 		#endregion
 	}
 }

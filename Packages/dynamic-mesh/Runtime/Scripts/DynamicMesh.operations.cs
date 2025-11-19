@@ -82,6 +82,8 @@ namespace Nianyi.UnityPack
 			return f;
 		}
 		public Face CreateFace(params Vertex[] vertices) => CreateFace(vertices as IEnumerable<Vertex>);
+		public Face CreateFace(IEnumerable<Vector3> positions) => CreateFace(positions.Select(p => CreateVertex(p)));
+		public Face CreateFace(params Vector3[] positions) => CreateFace(positions as IEnumerable<Vector3>);
 
 		public void DeleteFace(Face f)
 		{

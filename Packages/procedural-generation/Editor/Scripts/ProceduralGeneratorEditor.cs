@@ -4,7 +4,7 @@ using UnityEditor;
 namespace Nianyi.UnityPack
 {
 	[CustomEditor(typeof(ProceduralGenerator), true)]
-	public class ProceduralGeneratorEditor : Editor
+	public class ProceduralGeneratorEditor : UnityEditor.Editor
 	{
 		ProceduralGenerator Generator => serializedObject.targetObject as ProceduralGenerator;
 
@@ -12,7 +12,7 @@ namespace Nianyi.UnityPack
 		{
 			EditorGUILayout.BeginHorizontal();
 			if(GUILayout.Button("Regenerate"))
-				Generator.Regenerate();
+				Generator.UpdateGeneration();
 			if(GUILayout.Button("Ungarrison"))
 			{
 				if(EditorUtility.DisplayDialog("Confirm", "Sure to ungarrison?", "Yes", "Cancel"))

@@ -19,7 +19,7 @@ namespace Nianyi.UnityPack
 		/// A polygon face in a 3D model.
 		/// </summary>
 		/// <remarks>
-		/// The out-facing orientation is defined to be the clockwise order (left-hand rule).
+		/// The out-facing orientation is defined to be the counter-clockwise order (right-hand rule).
 		/// </remarks>
 		public class Face
 		{

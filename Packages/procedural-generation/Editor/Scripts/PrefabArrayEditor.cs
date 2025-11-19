@@ -1,8 +1,7 @@
 using UnityEngine;
 using UnityEditor;
-using System.Collections.Generic;
 
-namespace Nianyi.UnityPack
+namespace Nianyi.UnityPack.Editor
 {
 	[CustomEditor(typeof(PrefabArray))]
 	public class PrefabArrayEditor : ProceduralGeneratorEditor

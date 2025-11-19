@@ -18,13 +18,7 @@ namespace Nianyi.UnityPack
 		[SerializeField, Expanded] PrefabArrayConfig config;
 		[SerializeField, HideInInspector] List<GameObject> instances = new();
 
-		public override void Regenerate()
-		{
-			DestroyPreviousGeneration();
-			Generate();
-		}
-
-		void Generate()
+		public override void NewGeneration()
 		{
 			if(config == null)
 				return;
@@ -44,7 +38,7 @@ namespace Nianyi.UnityPack
 			}
 		}
 
-		void DestroyPreviousGeneration()
+		public override void DestroyGeneration()
 		{
 			foreach(var child in HierarchyUtility.GetDirectChildren(transform))
 				HierarchyUtility.Destroy(child.gameObject);

@@ -14,6 +14,8 @@ namespace Nianyi.UnityPack
 		[System.Serializable]
 		public class Room
 		{
+			public bool generateFloor = true;
+			public bool generateCeiling = true;
 			[SerializeField] public List<int> wallIndices;
 			[System.NonSerialized] public List<Wall> walls;
 		}
@@ -23,6 +25,7 @@ namespace Nianyi.UnityPack
 		{
 			public End from, to;
 			public bool fill = true;
+			public float thickness = 0.25f;
 
 			[System.Serializable]
 			public class End
@@ -30,7 +33,6 @@ namespace Nianyi.UnityPack
 				[SerializeField] public int vertexIndex;
 				[System.NonSerialized] public Vertex vertex;
 				public float height = 3f;
-				public float thickness = 0.1f;
 			}
 		}
 
