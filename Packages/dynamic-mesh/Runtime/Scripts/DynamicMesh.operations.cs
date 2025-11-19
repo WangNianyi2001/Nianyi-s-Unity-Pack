@@ -39,6 +39,8 @@ namespace Nianyi.UnityPack
 		}
 
 		public void TransformVertices(Matrix4x4 transform, Vector3 pivot, params Vertex[] vertices)
+			=> TransformVertices(transform, pivot, vertices as IEnumerable<Vertex>);
+		public void TransformVertices(Matrix4x4 transform, Vector3 pivot, IEnumerable<Vertex> vertices)
 		{
 			foreach(var v in vertices)
 				v.position = MathUtility.TransformAroundPivot(v.position, transform, pivot);
@@ -167,7 +169,8 @@ namespace Nianyi.UnityPack
 			}
 		}
 
-		public void InvertNormals(params Face[] faces)
+		public void InvertNormals(params Face[] faces) => InvertNormals(faces as IEnumerable<Face>);
+		public void InvertNormals(IEnumerable<Face> faces)
 		{
 			foreach(var f in faces)
 				InvertNormal(f);

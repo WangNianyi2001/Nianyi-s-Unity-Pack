@@ -25,7 +25,8 @@ namespace Nianyi.UnityPack
 		{
 			public End from, to;
 			public bool fill = true;
-			public float thickness = 0.25f;
+			[Min(0)] public float thickness = 0.25f;
+			public List<Hole> holes;
 
 			[System.Serializable]
 			public class End
@@ -33,6 +34,12 @@ namespace Nianyi.UnityPack
 				[SerializeField] public int vertexIndex;
 				[System.NonSerialized] public Vertex vertex;
 				public float height = 3f;
+			}
+
+			[System.Serializable]
+			public struct Hole
+			{
+				public Rect area;
 			}
 		}
 
@@ -68,7 +75,6 @@ namespace Nianyi.UnityPack
 				wall.to.vertexIndex = vertices.IndexOf(wall.to.vertex);
 			}
 		}
-
 		#endregion
 	}
 }

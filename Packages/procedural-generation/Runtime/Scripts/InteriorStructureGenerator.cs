@@ -95,7 +95,6 @@ namespace Nianyi.UnityPack
 					tangent = tangent,
 					normal = normal,
 				};
-
 			}
 			for(int i = 0; i < count; ++i)
 			{
@@ -107,14 +106,14 @@ namespace Nianyi.UnityPack
 				context.prev = prev;
 				context.next = next;
 
+				context.to = next.from;
+
+				// Normal-based floor displacement.
 				Vector3 displacement = context.normal * context.wall.thickness + prev.normal * prev.wall.thickness;
 				displacement *= .5f;
 				context.from.position += displacement;
 
-				context.to = next.from;
 				context.fromTop = mesh.CreateVertex(context.from.position + Vector3.up * context.GetEnd(false).height);
-
-				float margin = -Vector3.Dot(displacement, context.tangent);
 			}
 			foreach(var context in contexts)
 			{
@@ -151,7 +150,84 @@ namespace Nianyi.UnityPack
 
 		void GenerateWall(DynamicMesh mesh, WallContext context)
 		{
-			mesh.CreateFace(context.from, context.fromTop, context.toTop, context.to);
+			var wall = context.wall;
+			Vector3 span = wall.to.vertex.position - wall.from.vertex.position;
+			float length = span.magnitude;
+			float hFrom = wall.from.height, hTo = wall.to.height;
+
+			List<DynamicMesh.Vertex> vertices = new();
+			List<DynamicMesh.Face> faces = new();
+
+			var holes = new List<InteriorStructure.Wall.Hole>(wall.holes);
+			holes.Sort((a, b) => a.area.center.x < b.area.center.x ? -1 : 1);
+			for(int i = 1; i < holes.Count; ++i)
+			{
+				while(i < holes.Count)
+				{
+					if(holes[i].area.xMin >= holes[i - 1].area.xMin)
+						break;
+					holes.RemoveAt(i);
+				}
+			}
+
+			if(holes.Count == 0)
+				GenerateSolidSection(0, length);
+			else
+			{
+				GenerateSolidSection(0, holes[0].area.xMin);
+				for(int i = 0; i < holes.Count; ++i)
+				{
+					var area = holes[i].area;
+					GenerateHoleSection(area.xMin, area.xMax, area.yMin, area.yMax);
+					if(i + 1 != holes.Count)
+						GenerateSolidSection(area.xMax, holes[i + 1].area.xMin);
+				}
+				GenerateSolidSection(holes[holes.Count - 1].area.xMax, length);
+			}
+
+			Vector3 normal = Vector3.Cross(span, Vector3.up);
+
+			if(!context.flipped)
+			{
+				mesh.TransformVertices(Matrix4x4.Scale(new(1, 1, -1)), default, vertices);
+				mesh.InvertNormals(faces);
+			}
+			Matrix4x4 transform = Matrix4x4.TRS(
+				wall.from.vertex.position + context.normal * (wall.thickness * .5f),
+				Quaternion.LookRotation(normal), Vector3.one
+			);
+			mesh.TransformVertices(transform, default, vertices);
+
+			void GenerateSolidSection(float xMin, float xMax)
+			{
+				MakeFace(xMin, xMax, 0, GetHeightAt(xMin), GetHeightAt(xMax));
+			}
+
+			void GenerateHoleSection(float xMin, float xMax, float yMin, float yMax)
+			{
+				MakeFace(xMin, xMax, 0, yMin, yMin);
+				MakeFace(xMin, xMax, yMax, GetHeightAt(xMin), GetHeightAt(xMax));
+
+				// Inset surfaces.
+				MakeFace(xMin, xMax, 0, yMin, yMin);
+			}
+
+			void MakeFace(float xMin, float xMax, float yMin, float y1, float y2)
+			{
+				var face = mesh.CreateFace(
+					new Vector3(xMin, yMin),
+					new Vector3(xMax, yMin),
+					new Vector3(xMax, y2),
+					new Vector3(xMin, y1)
+				);
+				vertices.AddRange(face.Vertices);
+				faces.Add(face);
+			}
+
+			float GetHeightAt(float x)
+			{
+				return Mathf.Lerp(hFrom, hTo, x / length);
+			}
 		}
 		#endregion
 	}
