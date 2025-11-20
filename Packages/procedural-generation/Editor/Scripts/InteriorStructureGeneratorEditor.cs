@@ -6,7 +6,6 @@ using UnityEngine;
 namespace Nianyi.UnityPack.Editor
 {
 	using static InteriorStructure;
-	using static UnityEditor.PlayerSettings;
 
 	[CustomEditor(typeof(InteriorStructureGenerator))]
 	public class InteriorStructureGeneratorEditor : ProceduralGeneratorEditor
@@ -22,7 +21,7 @@ namespace Nianyi.UnityPack.Editor
 
 		#region Status
 		InteriorStructureGenerator generator;
-		InteriorStructure Structure => generator.config;
+		InteriorStructure Structure => generator.structure;
 		bool isEditing = false;
 
 		#region Selection mode
@@ -143,6 +142,8 @@ namespace Nianyi.UnityPack.Editor
 
 		public override void OnInspectorGUI()
 		{
+			DrawHeaderButtons();
+
 			if(!EditorApplication.isPlayingOrWillChangePlaymode)
 			{
 				if(GUILayout.Button("Toggle Edit Mode", new GUIStyle(GUI.skin.button)
@@ -160,7 +161,9 @@ namespace Nianyi.UnityPack.Editor
 					EditorGUILayout.Space();
 				}
 			}
-			base.OnInspectorGUI();
+
+			DrawPropertiesExcluding(serializedObject, "structure");
+			serializedObject.ApplyModifiedProperties();
 		}
 
 		protected void OnSceneGUI()
@@ -335,7 +338,7 @@ namespace Nianyi.UnityPack.Editor
 			{
 				var w = selectedWalls.First();
 				var index = Structure.walls.IndexOf(w);
-				var property = serializedObject.FindProperty($"config.walls.Array.data[{index}]");
+				var property = serializedObject.FindProperty($"structure.walls.Array.data[{index}]");
 				if(property != null)
 				{
 					EditorGUI.BeginChangeCheck();
@@ -364,7 +367,7 @@ namespace Nianyi.UnityPack.Editor
 			{
 				var r = selectedRooms.First();
 				var index = Structure.rooms.IndexOf(r);
-				var property = serializedObject.FindProperty($"config.rooms.Array.data[{index}]");
+				var property = serializedObject.FindProperty($"structure.rooms.Array.data[{index}]");
 				if(property != null)
 				{
 					EditorGUI.BeginChangeCheck();

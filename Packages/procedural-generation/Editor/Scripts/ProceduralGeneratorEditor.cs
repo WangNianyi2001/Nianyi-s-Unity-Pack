@@ -8,7 +8,7 @@ namespace Nianyi.UnityPack
 	{
 		ProceduralGenerator Generator => serializedObject.targetObject as ProceduralGenerator;
 
-		public override void OnInspectorGUI()
+		protected void DrawHeaderButtons()
 		{
 			EditorGUILayout.BeginHorizontal();
 			if(GUILayout.Button("Regenerate"))
@@ -22,6 +22,11 @@ namespace Nianyi.UnityPack
 				}
 			}
 			EditorGUILayout.EndHorizontal();
+		}
+
+		public override void OnInspectorGUI()
+		{
+			DrawHeaderButtons();
 
 			base.OnInspectorGUI();
 		}

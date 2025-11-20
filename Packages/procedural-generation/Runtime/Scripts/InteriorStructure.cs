@@ -7,16 +7,9 @@ namespace Nianyi.UnityPack
 	[System.Serializable]
 	public partial class InteriorStructure : ISerializationCallbackReceiver
 	{
-		[Header("Materials")]
-		public Material defaultFloorMaterial;
-		public Material defaultCeilingMaterial;
-		public Material defaultWallMaterial;
-		public Material defaultInsetMaterial;
-
-		[Header("Geometry")]
-		[HideInInspector] public List<Vertex> vertices = new();
-		[HideInInspector] public List<Wall> walls = new();
-		[HideInInspector] public List<Room> rooms = new();
+		public List<Vertex> vertices = new();
+		public List<Wall> walls = new();
+		public List<Room> rooms = new();
 
 		public interface IGeometry
 		{
@@ -28,6 +21,11 @@ namespace Nianyi.UnityPack
 		{
 			public bool generateFloor = true;
 			public bool generateCeiling = true;
+
+			public bool overrideFloorMaterial = false;
+			[ShowWhen(nameof(overrideFloorMaterial))] public Material floorMaterial;
+			public bool overrideCeilingMaterial = false;
+			[ShowWhen(nameof(overrideCeilingMaterial))] public Material ceilingMaterial;
 
 			[SerializeField] public List<int> wallIndices;
 			[System.NonSerialized] public List<Wall> walls;
@@ -60,6 +58,12 @@ namespace Nianyi.UnityPack
 			public bool fill = true;
 			[Min(0)] public float thickness = 0.25f;
 			public List<Hole> holes;
+
+			public bool overrideMaterials = false;
+			[ShowWhen(nameof(overrideMaterials))] public Material leftMaterial, rightMaterial, insetMaterial, outsideMaterial;
+
+			public bool overrideGenerateOutside = false;
+			[ShowWhen(nameof(overrideGenerateOutside))] public bool generateOutside = true;
 
 			public Vertex[] GetVertices()
 			{

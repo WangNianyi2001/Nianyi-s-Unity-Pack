@@ -6,6 +6,18 @@ namespace Nianyi.UnityPack
 {
 	public class InteriorStructureGenerator : ProceduralGenerator
 	{
+		#region Configurations
+		public bool generateOutside = true;
+		[Expanded] public InteriorStructure structure = new();
+
+		[Header("Materials")]
+		public Material defaultFloorMaterial;
+		public Material defaultCeilingMaterial;
+		public Material defaultWallMaterial;
+		public Material defaultInsetMaterial;
+		public Material defaultOutsideMaterial;
+		#endregion
+
 		#region Component references
 		[SerializeField, HideInInspector] MeshFilter meshFilter;
 		[SerializeField, HideInInspector] MeshRenderer meshRenderer;
@@ -23,7 +35,6 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Generation
-		[SerializeField, Expanded] public InteriorStructure config = new();
 
 		DynamicMesh mesh;
 		Dictionary<string, Material> materialMap;
@@ -47,13 +58,13 @@ namespace Nianyi.UnityPack
 			mesh = new();
 			materialMap = new()
 			{
-				["default-floor"] = config.defaultFloorMaterial,
-				["default-ceiling"] = config.defaultCeilingMaterial,
-				["default-inset"] = config.defaultInsetMaterial,
-				["default-wall"] = config.defaultWallMaterial,
+				["default-floor"] = defaultFloorMaterial,
+				["default-ceiling"] = defaultCeilingMaterial,
+				["default-inset"] = defaultInsetMaterial,
+				["default-wall"] = defaultWallMaterial,
 			};
 
-			foreach(var room in config.rooms)
+			foreach(var room in structure.rooms)
 				GenerateRoom(room);
 
 			mesh.WriteToMesh(outputMesh, out var materialSlots, true);
