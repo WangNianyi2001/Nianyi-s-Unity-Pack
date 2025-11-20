@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 namespace Nianyi.UnityPack
 {
@@ -48,6 +49,18 @@ namespace Nianyi.UnityPack
 		public static Vector3 TransformAroundPivot(in Vector3 v, in Matrix4x4 transform, in Vector3 pivot)
 		{
 			return transform.MultiplyPoint(v - pivot) + pivot;
+		}
+
+		public static Vector3 Average(IEnumerable<Vector3> vectors)
+		{
+			int i = 0;
+			Vector3 sum = default;
+			foreach(var v in vectors)
+			{
+				++i;
+				sum += v;
+			}
+			return sum / i;
 		}
 		#endregion
 

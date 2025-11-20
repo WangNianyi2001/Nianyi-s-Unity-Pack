@@ -110,6 +110,14 @@ namespace Nianyi.UnityPack.Editor
 				mode = value;
 			}
 		}
+
+		Vertex[] GetSelectedVertices()
+		{
+			return CurrentSelection
+				.SelectMany(g => g.GetVertices())
+				.Distinct()
+				.ToArray();
+		}
 		#endregion
 
 		#endregion
@@ -152,8 +160,13 @@ namespace Nianyi.UnityPack.Editor
 			if(target == null || !isEditing)
 				return;
 
+			// Hide native controls.
+			HandleUtility.AddDefaultControl(GUIUtility.GetControlID(FocusType.Passive));
+
 			foreach(var g in GeometriesOfCurrentType)
 				DrawGeometry(g);
+
+			DrawMoveControl();
 
 			DrawEditPanel(GetEditPanelArea());
 
@@ -256,7 +269,18 @@ namespace Nianyi.UnityPack.Editor
 				case EventType.MouseDown:
 					if(focused && e.button == 0)
 					{
-						SetSelectedState(g, !CurrentSelection.Contains(g));
+						if(!Event.current.shift)
+						{
+							// Individual selection.
+							foreach(var selected in CurrentSelection.ToArray())
+								SetSelectedState(selected, false);
+							SetSelectedState(g, true);
+						}
+						else
+						{
+							// Multiple selection.
+							SetSelectedState(g, !CurrentSelection.Contains(g));
+						}
 						e.Use();
 					}
 					break;
@@ -286,8 +310,36 @@ namespace Nianyi.UnityPack.Editor
 							DrawPolygon(vertices);
 							break;
 					}
-					
+
 					break;
+			}
+		}
+
+		void DrawMoveControl()
+		{
+			var verts = GetSelectedVertices();
+			if(verts.Length == 0)
+				return;
+
+			Vector3 pivot = generator.transform.TransformPoint(MathUtility.Average(verts.Select(v => v.position)));
+			Quaternion pivotOrientation = generator.transform.rotation;
+
+			EditorGUI.BeginChangeCheck();
+
+			Vector3 newPivot = Handles.PositionHandle(pivot, pivotOrientation);
+			newPivot = pivotOrientation * ApplySnap(Quaternion.Inverse(pivotOrientation) * newPivot);
+
+			if(EditorGUI.EndChangeCheck())
+			{
+				Undo.RecordObject(generator, "Move interior structure vertices");
+
+				Vector3 deltaWorld = newPivot - pivot;
+				Vector3 deltaLocal = generator.transform.InverseTransformVector(deltaWorld);
+
+				foreach(var v in verts)
+					v.position += deltaLocal;
+
+				generator.UpdateGeneration();
 			}
 		}
 		#endregion
@@ -300,6 +352,17 @@ namespace Nianyi.UnityPack.Editor
 			mesh.Triangularize();
 			foreach(var f in mesh.GetFaces())
 				Handles.DrawAAConvexPolygon(f.Vertices.Select(v => v.position).ToArray());
+		}
+
+		Vector3 ApplySnap(Vector3 pos)
+		{
+			if(!(EditorSnapSettings.gridSnapActive || EditorSnapSettings.incrementalSnapActive))
+				return pos;
+			Vector3 snap = EditorSnapSettings.move;
+			pos.x = Handles.SnapValue(pos.x, snap.x);
+			pos.y = Handles.SnapValue(pos.y, snap.y);
+			pos.z = Handles.SnapValue(pos.z, snap.z);
+			return pos;
 		}
 		#endregion
 	}
