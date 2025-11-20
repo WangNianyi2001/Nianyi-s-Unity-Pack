@@ -1,7 +1,6 @@
+using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
-using static Nianyi.UnityPack.InteriorStructure;
 
 namespace Nianyi.UnityPack
 {
@@ -19,8 +18,13 @@ namespace Nianyi.UnityPack
 		public List<Wall> walls;
 		public List<Room> rooms;
 
+		public interface IGeometry
+		{
+			public Vertex[] GetVertices();
+		}
+
 		[System.Serializable]
-		public class Room
+		public class Room : IGeometry
 		{
 			public bool generateFloor = true;
 			public bool generateCeiling = true;
@@ -28,18 +32,15 @@ namespace Nianyi.UnityPack
 			[SerializeField] public List<int> wallIndices;
 			[System.NonSerialized] public List<Wall> walls;
 
-			public Vertex[] Vertices
+			public Vertex[] GetVertices()
 			{
-				get
+				Vertex[] vertices = new Vertex[walls.Count];
+				for(int i = 0; i < walls.Count; ++i)
 				{
-					Vertex[] vertices = new Vertex[walls.Count];
-					for(int i = 0; i < walls.Count; ++i)
-					{
-						var w = walls[i];
-						vertices[i] = (IsWallFlipped(i) ? w.to : w.from).vertex;
-					}
-					return vertices;
+					var w = walls[i];
+					vertices[i] = (IsWallFlipped(i) ? w.to : w.from).vertex;
 				}
+				return vertices;
 			}
 
 			public bool IsWallFlipped(int i)
@@ -53,12 +54,17 @@ namespace Nianyi.UnityPack
 		}
 
 		[System.Serializable]
-		public class Wall
+		public class Wall : IGeometry
 		{
 			public End from, to;
 			public bool fill = true;
 			[Min(0)] public float thickness = 0.25f;
 			public List<Hole> holes;
+
+			public Vertex[] GetVertices()
+			{
+				return new Vertex[2] { from.vertex, to.vertex };
+			}
 
 			[System.Serializable]
 			public class End
@@ -78,9 +84,14 @@ namespace Nianyi.UnityPack
 		}
 
 		[System.Serializable]
-		public class Vertex
+		public class Vertex : IGeometry
 		{
 			public Vector3 position;
+
+			public Vertex[] GetVertices()
+			{
+				return new Vertex[1] { this };
+			}
 		}
 
 		#region Serialization

@@ -1,11 +1,12 @@
-using UnityEditor;
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
+using UnityEngine;
 
 namespace Nianyi.UnityPack.Editor
 {
 	using static InteriorStructure;
+	using static UnityEditor.PlayerSettings;
 
 	[CustomEditor(typeof(InteriorStructureGenerator))]
 	public class InteriorStructureGeneratorEditor : ProceduralGeneratorEditor
@@ -28,6 +29,47 @@ namespace Nianyi.UnityPack.Editor
 		readonly HashSet<Wall> selectedWalls = new();
 		readonly HashSet<Room> selectedRooms = new();
 
+		IEnumerable<IGeometry> GeometriesOfCurrentType => mode switch
+		{
+			SelectionMode.Vertices => generator.config.vertices,
+			SelectionMode.Walls => generator.config.walls,
+			SelectionMode.Rooms => generator.config.rooms,
+			_ => throw new System.NotImplementedException(),
+		};
+
+		IReadOnlyCollection<IGeometry> CurrentSelection => mode switch
+		{
+			SelectionMode.Vertices => selectedVertices,
+			SelectionMode.Walls => selectedWalls,
+			SelectionMode.Rooms => selectedRooms,
+			_ => throw new System.NotImplementedException(),
+		};
+
+		void SetSelectedState(IGeometry g, bool selected)
+		{
+			switch(g)
+			{
+				case Vertex v:
+					if(selected)
+						selectedVertices.Add(v);
+					else
+						selectedVertices.Remove(v);
+					break;
+				case Wall w:
+					if(selected)
+						selectedWalls.Add(w);
+					else
+						selectedWalls.Remove(w);
+					break;
+				case Room r:
+					if(selected)
+						selectedRooms.Add(r);
+					else
+						selectedRooms.Remove(r);
+					break;
+			}
+		}
+
 		enum SelectionMode { Vertices, Walls, Rooms }
 		SelectionMode mode = SelectionMode.Vertices;
 		SelectionMode Mode
@@ -38,78 +80,30 @@ namespace Nianyi.UnityPack.Editor
 				if(mode == value)
 					return;
 
-				switch(mode)
+				var vertices = CurrentSelection.SelectMany(g => g.GetVertices()).ToArray();
+
+				switch(value)
 				{
 					case SelectionMode.Vertices:
-						switch(value)
-						{
-							case SelectionMode.Walls:
-								selectedWalls.Clear();
-								foreach(var w in generator.config.walls)
-								{
-									if(selectedVertices.Contains(w.from.vertex) && selectedVertices.Contains(w.to.vertex))
-										selectedWalls.Add(w);
-								}
-								break;
-							case SelectionMode.Rooms:
-								selectedRooms.Clear();
-								foreach(var r in generator.config.rooms)
-								{
-									if(r.Vertices.All(v => selectedVertices.Contains(v)))
-										selectedRooms.Add(r);
-								}
-								break;
-						}
 						selectedVertices.Clear();
+						foreach(var v in vertices)
+							selectedVertices.Add(v);
 						break;
-
 					case SelectionMode.Walls:
-						switch(value)
-						{
-							case SelectionMode.Vertices:
-								selectedVertices.Clear();
-								foreach(var w in selectedWalls)
-								{
-									selectedVertices.Add(w.from.vertex);
-									selectedVertices.Add(w.to.vertex);
-								}
-								break;
-							case SelectionMode.Rooms:
-								selectedRooms.Clear();
-								foreach(var r in generator.config.rooms)
-								{
-									if(r.walls.All(w => selectedWalls.Contains(w)))
-										selectedRooms.Add(r);
-								}
-								break;
-						}
 						selectedWalls.Clear();
-						break;
-
-					case SelectionMode.Rooms:
-						switch(value)
+						foreach(var w in generator.config.walls)
 						{
-							case SelectionMode.Vertices:
-								selectedVertices.Clear();
-								foreach(var r in selectedRooms)
-								{
-									foreach(var w in r.walls)
-									{
-										selectedVertices.Add(w.from.vertex);
-										selectedVertices.Add(w.to.vertex);
-									}
-								}
-								break;
-							case SelectionMode.Walls:
-								selectedWalls.Clear();
-								foreach(var r in selectedRooms)
-								{
-									foreach(var w in r.walls)
-										selectedWalls.Add(w);
-								}
-								break;
+							if(vertices.Contains(w.from.vertex) && vertices.Contains(w.to.vertex))
+								selectedWalls.Add(w);
 						}
+						break;
+					case SelectionMode.Rooms:
 						selectedRooms.Clear();
+						foreach(var r in generator.config.rooms)
+						{
+							if(r.GetVertices().All(v => vertices.Contains(v)))
+								selectedRooms.Add(r);
+						}
 						break;
 				}
 
@@ -158,21 +152,8 @@ namespace Nianyi.UnityPack.Editor
 			if(target == null || !isEditing)
 				return;
 
-			switch(Mode)
-			{
-				case SelectionMode.Vertices:
-					foreach(var v in generator.config.vertices)
-						DrawVertex(v);
-					break;
-				case SelectionMode.Walls:
-					foreach(var w in generator.config.walls)
-						DrawWall(w);
-					break;
-				case SelectionMode.Rooms:
-					foreach(var r in generator.config.rooms)
-						DrawRoom(r);
-					break;
-			}
+			foreach(var g in GeometriesOfCurrentType)
+				DrawGeometry(g);
 
 			DrawEditPanel(GetEditPanelArea());
 
@@ -239,117 +220,73 @@ namespace Nianyi.UnityPack.Editor
 			Handles.EndGUI();
 		}
 
-		void DrawVertex(Vertex v)
+		void DrawGeometry(IGeometry g)
 		{
+			Vector3[] vertices = g.GetVertices()
+				.Select(p => generator.transform.TransformPoint(p.position))
+				.ToArray();
+			if(vertices.Length == 0)
+				return;
+
 			int id = GUIUtility.GetControlID(FocusType.Passive);
 			Event e = Event.current;
 			bool focused = HandleUtility.nearestControl == id;
-
-			Vector3 pos = generator.transform.TransformPoint(v.position);
-
-			switch(e.GetTypeForControl(id))
-			{
-				case EventType.Layout:
-					float dist = HandleUtility.DistanceToCircle(pos,
-						HandleUtility.GetHandleSize(pos) * vertexSize);
-					HandleUtility.AddControl(id, dist);
-					break;
-
-				case EventType.MouseDown:
-					if(focused && e.button == 0)
-					{
-						if(!selectedVertices.Contains(v))
-							selectedVertices.Add(v);
-						else
-							selectedVertices.Remove(v);
-
-						e.Use();
-					}
-					break;
-
-				case EventType.Repaint:
-					Handles.color = focused ? focusedColor :
-						selectedVertices.Contains(v) ? selectedColor : normalColor;
-
-					Handles.SphereHandleCap(id, pos,
-						Quaternion.identity,
-						HandleUtility.GetHandleSize(pos) * vertexSize,
-						EventType.Repaint);
-					break;
-			}
-		}
-
-		void DrawWall(Wall w)
-		{
-			int id = GUIUtility.GetControlID(FocusType.Passive);
-			Event e = Event.current;
-			bool focused = HandleUtility.nearestControl == id;
-
-			Vector3
-				fromPos = generator.transform.TransformPoint(w.from.Position),
-				toPos = generator.transform.TransformPoint(w.to.Position);
-
-			switch(e.GetTypeForControl(id))
-			{
-				case EventType.Layout:
-					float dist = Mathf.Max(0, HandleUtility.DistanceToLine(fromPos, toPos) - wallThickness + 1);
-					HandleUtility.AddControl(id, dist);
-					break;
-
-				case EventType.MouseDown:
-					if(focused && e.button == 0)
-					{
-						if(!selectedWalls.Contains(w))
-							selectedWalls.Add(w);
-						else
-							selectedWalls.Remove(w);
-
-						e.Use();
-					}
-					break;
-
-				case EventType.Repaint:
-					Handles.color = focused ? focusedColor :
-						selectedWalls.Contains(w) ? selectedColor : normalColor;
-
-					Handles.DrawLine(fromPos, toPos, wallThickness);
-					break;
-			}
-		}
-
-		void DrawRoom(Room r)
-		{
-			int id = GUIUtility.GetControlID(FocusType.Passive);
-			Event e = Event.current;
-			bool focused = HandleUtility.nearestControl == id;
-
-			Vector3[] vertexPositions = r.Vertices.Select(p => generator.transform.TransformPoint(p.position)).ToArray();
-			Vector2[] poly = vertexPositions.Select(p => HandleUtility.WorldToGUIPoint(p)).ToArray();
 			Vector2 mouse = Event.current.mousePosition;
 
 			switch(e.GetTypeForControl(id))
 			{
 				case EventType.Layout:
-					float dist = MathUtility.DistanceToPolygon(mouse, poly);
+					float dist;
+					switch(vertices.Length)
+					{
+						case 1:
+							dist = HandleUtility.DistanceToCircle(vertices[0], HandleUtility.GetHandleSize(vertices[0]) * vertexSize);
+							break;
+						case 2:
+							dist = HandleUtility.DistancePointToLine(mouse, vertices[0], vertices[1]);
+							break;
+						default:
+							Vector2[] poly = vertices.Select(p => HandleUtility.WorldToGUIPoint(p)).ToArray();
+							dist = MathUtility.DistanceToPolygon(mouse, poly);
+							break;
+					}
 					HandleUtility.AddControl(id, dist);
 					break;
 
 				case EventType.MouseDown:
 					if(focused && e.button == 0)
 					{
-						if(!selectedRooms.Contains(r))
-							selectedRooms.Add(r);
-						else
-							selectedRooms.Remove(r);
-
+						SetSelectedState(g, !CurrentSelection.Contains(g));
 						e.Use();
 					}
 					break;
 
 				case EventType.Repaint:
-					Handles.color = focused ? focusedColor :
-						selectedRooms.Contains(r) ? selectedColor : normalColor;
-					DrawPolygon(vertexPositions);
+					Color color = focused ? focusedColor :
+						CurrentSelection.Contains(g) ? selectedColor : normalColor;
+					if(vertices.Length >= 3)
+						color.a *= 0.3f;
+
+					Handles.color = color;
+
+
+					switch(vertices.Length)
+					{
+						case 1:
+							Handles.SphereHandleCap(id, vertices[0],
+								Quaternion.identity,
+								HandleUtility.GetHandleSize(vertices[0]) * vertexSize,
+								EventType.Repaint
+							);
+							break;
+						case 2:
+							Handles.DrawLine(vertices[0], vertices[1], wallThickness);
+							break;
+						default:
+							DrawPolygon(vertices);
+							break;
+					}
+					
 					break;
 			}
 		}
