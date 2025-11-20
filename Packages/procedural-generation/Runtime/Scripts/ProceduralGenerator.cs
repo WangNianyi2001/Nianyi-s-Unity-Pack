@@ -11,11 +11,10 @@ namespace Nianyi.UnityPack
 #if UNITY_EDITOR
 			if(!UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
 			{
-				UpdateGeneration();
+				Generate();
 				return;
 			}
 #endif
-			UpdateGeneration();
 			Ungarrison();
 		}
 
@@ -37,7 +36,7 @@ namespace Nianyi.UnityPack
 			{
 				if(UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
 					return;
-				UpdateGeneration();
+				Generate();
 			};
 		}
 #endif
@@ -49,16 +48,8 @@ namespace Nianyi.UnityPack
 			HierarchyUtility.Destroy(this);
 		}
 
-		public abstract void NewGeneration();
 		public abstract void DestroyGeneration();
-		/// <summary>
-		/// Should replace with incremental implementation in child classes.
-		/// </summary>
-		public virtual void UpdateGeneration()
-		{
-			DestroyGeneration();
-			NewGeneration();
-		}
+		public abstract void Generate();
 		#endregion
 	}
 }

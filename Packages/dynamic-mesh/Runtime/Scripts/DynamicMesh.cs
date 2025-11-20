@@ -25,7 +25,7 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Export
-		public Mesh ToMesh(out string[] materialMap, bool recalculateNormals = false)
+		public void WriteToMesh(Mesh mesh, out string[] materialMap, bool recalculateNormals = false)
 		{
 			DynamicMesh triangulated = Duplicate();
 			triangulated.Triangularize();
@@ -50,8 +50,6 @@ namespace Nianyi.UnityPack
 					submeshIndices[submeshIndex].Add(cornerIndexMap[c]);
 			}
 
-			Mesh mesh = new();
-
 			mesh.SetVertices(corners.Select(c => c.vertex.position).ToList());
 			mesh.SetNormals(corners.Select(c => c.normal).ToList());
 			for(int i = 0; i < usedUvChannelCount; ++i)
@@ -73,7 +71,6 @@ namespace Nianyi.UnityPack
 			mesh.RecalculateBounds();
 
 			materialMap = materialIndexMap.Keys.ToArray();
-			return mesh;
 		}
 		#endregion
 	}

@@ -15,13 +15,13 @@ namespace Nianyi.UnityPack
 	public class PrefabArray : ProceduralGenerator
 	{
 		#region Generation
-		[SerializeField, Expanded] PrefabArrayConfig config;
+		[SerializeField, Expanded] PrefabArrayConfig config = new();
 		[SerializeField, HideInInspector] List<GameObject> instances = new();
 
-		public override void NewGeneration()
+		public override void Generate()
 		{
-			if(config == null)
-				return;
+			DestroyGeneration();
+
 			if(config?.prefab == null)
 				return;
 

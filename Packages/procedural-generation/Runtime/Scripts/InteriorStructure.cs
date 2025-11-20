@@ -14,9 +14,9 @@ namespace Nianyi.UnityPack
 		public Material defaultInsetMaterial;
 
 		[Header("Geometry")]
-		public List<Vertex> vertices = new();
-		public List<Wall> walls = new();
-		public List<Room> rooms = new();
+		[HideInInspector] public List<Vertex> vertices = new();
+		[HideInInspector] public List<Wall> walls = new();
+		[HideInInspector] public List<Room> rooms = new();
 
 		public interface IGeometry
 		{

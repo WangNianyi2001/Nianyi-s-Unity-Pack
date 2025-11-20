@@ -494,7 +494,7 @@ namespace Nianyi.UnityPack.Editor
 
 		void ReportChange()
 		{
-			generator.UpdateGeneration();
+			generator.Generate();
 		}
 
 		void TriggerInspectorRefresh()

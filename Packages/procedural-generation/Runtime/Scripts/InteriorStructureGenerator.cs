@@ -4,29 +4,45 @@ using System.Linq;
 
 namespace Nianyi.UnityPack
 {
-	[RequireComponent(typeof(MeshFilter)), RequireComponent(typeof(MeshRenderer))]
 	public class InteriorStructureGenerator : ProceduralGenerator
 	{
 		#region Component references
-		MeshFilter meshFilter;
-		MeshRenderer meshRenderer;
+		[SerializeField, HideInInspector] MeshFilter meshFilter;
+		[SerializeField, HideInInspector] MeshRenderer meshRenderer;
+		[SerializeField, HideInInspector] Mesh outputMesh;
 
-		void FetchComponentReferences()
+		void SetupReferences()
 		{
 			HierarchyUtility.EnsureComponent(gameObject, out meshFilter);
 			HierarchyUtility.EnsureComponent(gameObject, out meshRenderer);
+			if(outputMesh == null)
+				outputMesh = new();
+			outputMesh.name = name;
+			meshFilter.sharedMesh = outputMesh;
 		}
 		#endregion
 
 		#region Generation
-		[SerializeField, ReadOnlyInInspector, Expanded] public InteriorStructure config = new();
+		[SerializeField, Expanded] public InteriorStructure config = new();
 
 		DynamicMesh mesh;
 		Dictionary<string, Material> materialMap;
 
-		public override void NewGeneration()
+		public override void DestroyGeneration()
 		{
-			FetchComponentReferences();
+			HierarchyUtility.Destroy(meshRenderer);
+			meshRenderer = null;
+
+			HierarchyUtility.Destroy(meshFilter);
+			meshFilter = null;
+
+			HierarchyUtility.Destroy(outputMesh);
+			outputMesh = null;
+		}
+
+		public override void Generate()
+		{
+			SetupReferences();
 
 			mesh = new();
 			materialMap = new()
@@ -40,20 +56,10 @@ namespace Nianyi.UnityPack
 			foreach(var room in config.rooms)
 				GenerateRoom(room);
 
-			meshFilter.sharedMesh = mesh.ToMesh(out var materialSlots, true);
+			mesh.WriteToMesh(outputMesh, out var materialSlots, true);
 			meshRenderer.sharedMaterials = materialSlots
 				.Select(name => materialMap.ContainsKey(name) ? materialMap[name] : null)
 				.ToArray();
-		}
-
-		public override void DestroyGeneration()
-		{
-			FetchComponentReferences();
-
-			HierarchyUtility.Destroy(meshFilter.sharedMesh);
-			meshFilter.sharedMesh = null;
-
-			meshRenderer.sharedMaterials = new Material[0];
 		}
 
 		class WallContext

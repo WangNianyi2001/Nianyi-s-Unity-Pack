@@ -12,7 +12,7 @@ namespace Nianyi.UnityPack
 		{
 			EditorGUILayout.BeginHorizontal();
 			if(GUILayout.Button("Regenerate"))
-				Generator.UpdateGeneration();
+				Generator.Generate();
 			if(GUILayout.Button("Ungarrison"))
 			{
 				if(EditorUtility.DisplayDialog("Confirm", "Sure to ungarrison?", "Yes", "Cancel"))
