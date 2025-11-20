@@ -69,6 +69,15 @@ namespace Nianyi.UnityPack.Editor
 						selectedRooms.Remove(r);
 					break;
 			}
+			TriggerInspectorRefresh();
+		}
+
+		void ClearSelection()
+		{
+			selectedVertices.Clear();
+			selectedWalls.Clear();
+			selectedRooms.Clear();
+			TriggerInspectorRefresh();
 		}
 
 		enum SelectionMode { Vertices, Walls, Rooms }
@@ -82,16 +91,15 @@ namespace Nianyi.UnityPack.Editor
 					return;
 
 				var vertices = CurrentSelection.SelectMany(g => g.GetVertices()).ToArray();
+				ClearSelection();
 
 				switch(value)
 				{
 					case SelectionMode.Vertices:
-						selectedVertices.Clear();
 						foreach(var v in vertices)
 							selectedVertices.Add(v);
 						break;
 					case SelectionMode.Walls:
-						selectedWalls.Clear();
 						foreach(var w in Structure.walls)
 						{
 							if(vertices.Contains(w.from.vertex) && vertices.Contains(w.to.vertex))
@@ -99,7 +107,6 @@ namespace Nianyi.UnityPack.Editor
 						}
 						break;
 					case SelectionMode.Rooms:
-						selectedRooms.Clear();
 						foreach(var r in Structure.rooms)
 						{
 							if(r.GetVertices().All(v => vertices.Contains(v)))
@@ -129,12 +136,8 @@ namespace Nianyi.UnityPack.Editor
 			if(target as InteriorStructureGenerator != generator)
 			{
 				isEditing = false;
-
 				generator = target as InteriorStructureGenerator;
-
-				selectedVertices.Clear();
-				selectedWalls.Clear();
-				selectedRooms.Clear();
+				ClearSelection();
 			}
 		}
 
@@ -229,68 +232,146 @@ namespace Nianyi.UnityPack.Editor
 			switch(Mode)
 			{
 				case SelectionMode.Vertices:
-					if(GUILayout.Button("Dissolve vertices"))
-					{
-						RecordBeforeUndo("Dissolve vertices");
-						foreach(var v in selectedVertices)
-							Structure.DissolveVertex(v);
-						ReportChange();
-					}
-					if(GUILayout.Button("Delete vertices"))
-					{
-						if(EditorUtility.DisplayDialog("Confirm", "Delete vertices?", "Delete", "Cancel"))
-						{
-							RecordBeforeUndo("Delete vertices");
-							foreach(var v in selectedVertices)
-								Structure.DeleteVertex(v);
-							ReportChange();
-						}
-					}
+					DrawVertexGui();
 					break;
 				case SelectionMode.Walls:
-					if(GUILayout.Button("Extrude"))
-					{
-						RecordBeforeUndo("Extrue walls");
-						var extruded = Structure.ExtrudeWalls(selectedWalls.ToArray(), default);
-						selectedWalls.Clear();
-						foreach(var w in extruded)
-							selectedWalls.Add(w);
-						ReportChange();
-					}
-					if(GUILayout.Button("Delete walls"))
-					{
-						if(EditorUtility.DisplayDialog("Confirm", "Delete walls?", "Delete", "Cancel"))
-						{
-							RecordBeforeUndo("Delete walls");
-							foreach(var w in selectedWalls)
-								Structure.DeleteWall(w);
-							ReportChange();
-						}
-					}
-					using(new GUILayout.HorizontalScope())
-					{
-						subdivisionCount = Mathf.Max(1, EditorGUILayout.IntField(subdivisionCount));
-						if(GUILayout.Button("Subdvide"))
-						{
-							RecordBeforeUndo("Subdivide walls");
-							foreach(var w in selectedWalls)
-								Structure.SubdivideWallEvenly(w, subdivisionCount);
-							ReportChange();
-						}
-					}
+					DrawWallGui();
 					break;
 				case SelectionMode.Rooms:
-					if(GUILayout.Button("Delete rooms"))
-					{
-						if(EditorUtility.DisplayDialog("Confirm", "Delete rooms?", "Delete", "Cancel"))
-						{
-							RecordBeforeUndo("Delete rooms");
-							foreach(var r in selectedRooms)
-								Structure.DeleteRoom(r);
-							ReportChange();
-						}
-					}
+					DrawRoomGui();
 					break;
+			}
+		}
+
+		void DrawVertexGui()
+		{
+			if(GUILayout.Button("Dissolve vertices"))
+			{
+				RecordBeforeUndo("Dissolve vertices");
+				foreach(var v in selectedVertices)
+					Structure.DissolveVertex(v);
+				ReportChange();
+			}
+			if(GUILayout.Button("Delete vertices"))
+			{
+				if(EditorUtility.DisplayDialog("Confirm", "Delete vertices?", "Delete", "Cancel"))
+				{
+					RecordBeforeUndo("Delete vertices");
+					foreach(var v in selectedVertices)
+						Structure.DeleteVertex(v);
+					ReportChange();
+				}
+			}
+			if(selectedVertices.Count == 2)
+			{
+				if(GUILayout.Button("Connect vertices"))
+				{
+					RecordBeforeUndo("Connect vertices");
+					Vertex[] vertices = selectedVertices.ToArray();
+					Structure.ConnectVertices(vertices[0], vertices[1]);
+					ReportChange();
+				}
+			}
+		}
+
+		void DrawWallGui()
+		{
+			if(GUILayout.Button("Extrude walls"))
+			{
+				RecordBeforeUndo("Extrude walls");
+				var extruded = Structure.ExtrudeWalls(selectedWalls.ToArray(), default);
+				ClearSelection();
+				foreach(var w in extruded)
+					selectedWalls.Add(w);
+				ReportChange();
+			}
+			if(GUILayout.Button("Dissolve walls"))
+			{
+				RecordBeforeUndo("Dissolve walls");
+				foreach(var w in selectedWalls)
+					Structure.DissolveWall(w);
+				ReportChange();
+			}
+			if(GUILayout.Button("Delete walls"))
+			{
+				if(EditorUtility.DisplayDialog("Confirm", "Delete walls?", "Delete", "Cancel"))
+				{
+					RecordBeforeUndo("Delete walls");
+					foreach(var w in selectedWalls)
+						Structure.DeleteWall(w);
+					ReportChange();
+				}
+			}
+			using(new GUILayout.HorizontalScope())
+			{
+				subdivisionCount = Mathf.Max(1, EditorGUILayout.IntField(subdivisionCount));
+				if(GUILayout.Button("Subdvide"))
+				{
+					RecordBeforeUndo("Subdivide walls");
+					foreach(var w in selectedWalls)
+						Structure.SubdivideWallEvenly(w, subdivisionCount);
+					ReportChange();
+				}
+			}
+
+			if(selectedWalls.Count >= 3)
+			{
+				if(GUILayout.Button("Make room"))
+				{
+					RecordBeforeUndo("Make room");
+					var w = Structure.CreateRoomFromWalls(selectedWalls);
+					if(w != null)
+					{
+						ClearSelection();
+						selectedRooms.Add(w);
+						Mode = SelectionMode.Rooms;
+						ReportChange();
+					}
+				}
+			}
+
+			// Inspection.
+			if(selectedWalls.Count == 1)
+			{
+				var w = selectedWalls.First();
+				var index = Structure.walls.IndexOf(w);
+				var property = serializedObject.FindProperty($"config.walls.Array.data[{index}]");
+				if(property != null)
+				{
+					EditorGUI.BeginChangeCheck();
+					EditorGUILayout.PropertyField(property, new GUIContent("Wall Properties"), true);
+					if(EditorGUI.EndChangeCheck())
+						serializedObject.ApplyModifiedProperties();
+				}
+			}
+		}
+
+		void DrawRoomGui()
+		{
+			if(GUILayout.Button("Delete rooms"))
+			{
+				if(EditorUtility.DisplayDialog("Confirm", "Delete rooms?", "Delete", "Cancel"))
+				{
+					RecordBeforeUndo("Delete rooms");
+					foreach(var r in selectedRooms)
+						Structure.DeleteRoom(r);
+					ReportChange();
+				}
+			}
+
+			// Inspection.
+			if(selectedRooms.Count == 1)
+			{
+				var r = selectedRooms.First();
+				var index = Structure.rooms.IndexOf(r);
+				var property = serializedObject.FindProperty($"config.rooms.Array.data[{index}]");
+				if(property != null)
+				{
+					EditorGUI.BeginChangeCheck();
+					EditorGUILayout.PropertyField(property, new GUIContent("Room Properties"), true);
+					if(EditorGUI.EndChangeCheck())
+						serializedObject.ApplyModifiedProperties();
+				}
 			}
 		}
 
@@ -414,6 +495,11 @@ namespace Nianyi.UnityPack.Editor
 		void ReportChange()
 		{
 			generator.UpdateGeneration();
+		}
+
+		void TriggerInspectorRefresh()
+		{
+			Repaint();
 		}
 
 		static void DrawPolygon(Vector3[] poly)

@@ -229,6 +229,87 @@ namespace Nianyi.UnityPack
 			vertices.Remove(v);
 		}
 
+		public Wall ConnectVertices(Vertex a, Vertex b)
+		{
+			// 基本合法性检查。
+			if(a == null || b == null)
+				return null;
+			if(a == b)
+			{
+				Debug.LogWarning("ConnectVertices: vertices must be distinct.");
+				return null;
+			}
+			if(vertices == null || walls == null)
+				return null;
+			if(!vertices.Contains(a) || !vertices.Contains(b))
+			{
+				Debug.LogWarning("ConnectVertices: both vertices must belong to this InteriorStructure.");
+				return null;
+			}
+
+			// 检查这两个顶点之间是否已经有墙（任意朝向）。
+			foreach(var w in walls)
+			{
+				if(w.from.vertex == null || w.to.vertex == null)
+					continue;
+
+				bool forward = w.from.vertex == a && w.to.vertex == b;
+				bool backward = w.from.vertex == b && w.to.vertex == a;
+				if(forward || backward)
+				{
+					Debug.LogWarning("ConnectVertices: there is already a wall between the two vertices.");
+					return null;
+				}
+			}
+
+			// 尝试从相邻墙推断高度和厚度。
+			const float defaultHeight = 3f;
+			const float defaultThickness = 0.25f;
+
+			float ha = defaultHeight;
+			float hb = defaultHeight;
+			float thickness = defaultThickness;
+
+			var wallsA = FindWallsUsingVertex(a).ToArray();
+			var wallsB = FindWallsUsingVertex(b).ToArray();
+
+			if(wallsA.Length > 0)
+			{
+				var w0 = wallsA[0];
+				ha = (w0.from.vertex == a ? w0.from.height : w0.to.height);
+				thickness = w0.thickness;
+			}
+
+			if(wallsB.Length > 0)
+			{
+				var w0 = wallsB[0];
+				hb = (w0.from.vertex == b ? w0.from.height : w0.to.height);
+				if(thickness <= 0f)
+					thickness = w0.thickness;
+			}
+
+			// 创建新墙，方向就按传入顺序 a -> b。
+			Wall newWall = new Wall
+			{
+				from = new Wall.End
+				{
+					vertex = a,
+					height = ha,
+				},
+				to = new Wall.End
+				{
+					vertex = b,
+					height = hb,
+				},
+				fill = true,
+				thickness = thickness,
+				holes = new List<Wall.Hole>(),
+			};
+
+			walls.Add(newWall);
+			return newWall;
+		}
+
 		#endregion
 
 
@@ -419,6 +500,381 @@ namespace Nianyi.UnityPack
 				DeleteRoom(r);
 
 			PruneWall(w);
+		}
+
+		// GPT generated.
+		public bool DissolveWall(Wall w)
+		{
+			if(w == null || !walls.Contains(w))
+				return false;
+
+			// 查这条墙被几个房间用到。
+			var roomsUsing = FindRoomsUsingWall(w).ToArray();
+
+			// 情况一：两边都没有房间，直接删墙。
+			if(roomsUsing.Length == 0)
+			{
+				walls.Remove(w);
+				PruneVertex(w.from.vertex);
+				PruneVertex(w.to.vertex);
+				return true;
+			}
+
+			// 情况二：恰好两个房间，共用这条墙，尝试合并。
+			if(roomsUsing.Length != 2)
+				return false;
+
+			Room rA = roomsUsing[0];
+			Room rB = roomsUsing[1];
+
+			if(rA.walls == null || rB.walls == null)
+				return false;
+
+			// 找出这两个房间之间所有共用的墙（可能不止一条）。
+			var shared = rA.walls.Intersect(rB.walls).Distinct().ToList();
+			if(shared.Count == 0)
+				return false; // 理论上不应该发生
+
+			// 这条被消去的墙一定算在 shared 里，如果不在就补上。
+			if(!shared.Contains(w))
+				shared.Add(w);
+
+			// 被选中的这条墙从全局 walls 里直接删除；
+			// 其他共用墙只从两个房间的 walls 里去掉，留下来当“孤墙”。
+			walls.Remove(w);
+
+			foreach(var s in shared)
+			{
+				rA.walls.Remove(s);
+				rB.walls.Remove(s);
+			}
+
+			// 合并后的新房间边界 = 两个房间的墙并集，减去所有共用边。
+			var boundaryWalls = rA.walls
+				.Concat(rB.walls)
+				.Distinct()
+				.ToList();
+
+			if(boundaryWalls.Count < 3)
+			{
+				// 退化情况：合并后已经不能构成房间了，
+				// 那就当这俩房间都被删掉。
+				rooms.Remove(rA);
+				rooms.Remove(rB);
+
+				PruneVertex(w.from.vertex);
+				PruneVertex(w.to.vertex);
+
+				return true;
+			}
+
+			// 用“边-顶点”邻接关系，把 boundaryWalls 重新串成一个闭合环。
+			// 假定拓扑是正常的室内平面：边界图是一条简单闭合曲线。
+
+			Dictionary<Vertex, List<Wall>> adj = new();
+
+			void AddAdj(Vertex v, Wall e)
+			{
+				if(!adj.TryGetValue(v, out var list))
+				{
+					list = new List<Wall>();
+					adj[v] = list;
+				}
+				list.Add(e);
+			}
+
+			foreach(var e in boundaryWalls)
+			{
+				AddAdj(e.from.vertex, e);
+				AddAdj(e.to.vertex, e);
+			}
+
+			// 简单 sanity check：理想情况每个边界顶点度数为 2。
+			foreach(var kv in adj)
+			{
+				if(kv.Value.Count != 2)
+				{
+					Debug.LogWarning("DissolveWall: boundary graph is not a simple cycle; result may be invalid.");
+					break;
+				}
+			}
+
+			HashSet<Wall> used = new();
+			List<Wall> loop = new();
+
+			Wall cur = boundaryWalls[0];
+			Vertex startV = cur.from.vertex;
+			Vertex curV = startV;
+
+			for(int steps = 0; steps < boundaryWalls.Count * 2; ++steps)
+			{
+				loop.Add(cur);
+				used.Add(cur);
+
+				// 当前边在当前点的另一端。
+				Vertex nextV = (cur.from.vertex == curV) ? cur.to.vertex : cur.from.vertex;
+
+				// 在 nextV 上找未用过的下一条边。
+				if(!adj.TryGetValue(nextV, out var listNext) || listNext.Count == 0)
+					break;
+
+				Wall next = null;
+				foreach(var e in listNext)
+				{
+					if(!used.Contains(e))
+					{
+						next = e;
+						break;
+					}
+				}
+
+				if(next == null)
+				{
+					// 没有未用边了，如果回到起点，就算建成一个闭环。
+					if(nextV == startV)
+						break;
+					else
+						break;
+				}
+
+				curV = nextV;
+				cur = next;
+			}
+
+			if(used.Count != boundaryWalls.Count)
+				Debug.LogWarning("DissolveWall: could not cover all boundary walls with a single closed loop.");
+
+			// 手动修复：墙是反的。
+			loop.Reverse();
+
+			// 创建新房间，属性做个并集（你也可以按自己语义选 rA 或 rB）。
+			Room newRoom = new Room
+			{
+				generateFloor = rA.generateFloor || rB.generateFloor,
+				generateCeiling = rA.generateCeiling || rB.generateCeiling,
+				walls = loop,
+			};
+
+			// 把旧房间摘掉，挂上新房间。
+			rooms.Remove(rA);
+			rooms.Remove(rB);
+			rooms.Add(newRoom);
+
+			// 删掉这条墙之后，如果两个端点不再被任何墙使用，会在 PruneVertex 里被清掉。
+			PruneVertex(w.from.vertex);
+			PruneVertex(w.to.vertex);
+
+			return true;
+		}
+
+		// GPT generated.
+		public Room CreateRoomFromWalls(IEnumerable<Wall> selected)
+		{
+			if(selected == null)
+				return null;
+
+			if(walls == null)
+				walls = new List<Wall>();
+			if(rooms == null)
+				rooms = new List<Room>();
+
+			// 去重 + 列表化。
+			List<Wall> input = selected.Distinct().ToList();
+			if(input.Count < 3)
+			{
+				Debug.LogWarning("CreateRoomFromWalls: need at least 3 walls.");
+				return null;
+			}
+
+			// 必须全部属于当前结构。
+			foreach(var w in input)
+			{
+				if(w == null || !walls.Contains(w))
+				{
+					Debug.LogWarning("CreateRoomFromWalls: a wall is null or not in this InteriorStructure.");
+					return null;
+				}
+			}
+
+			// 建顶点邻接表，只考虑选中的墙。
+			Dictionary<Vertex, List<Wall>> adj = new Dictionary<Vertex, List<Wall>>();
+
+			void AddAdj(Vertex v, Wall e)
+			{
+				if(v == null)
+					return;
+				if(!adj.TryGetValue(v, out var list))
+				{
+					list = new List<Wall>();
+					adj[v] = list;
+				}
+				list.Add(e);
+			}
+
+			foreach(var e in input)
+			{
+				AddAdj(e.from.vertex, e);
+				AddAdj(e.to.vertex, e);
+			}
+
+			// 简单环拓扑：每个顶点度数应为 2。
+			foreach(var kv in adj)
+			{
+				if(kv.Value.Count != 2)
+				{
+					Debug.LogWarning("CreateRoomFromWalls: selected walls do not form a simple closed loop.");
+					return null;
+				}
+			}
+
+			// 按邻接关系排出一个闭合环（walls 顺序 + 顶点顺序）。
+			List<Wall> loopWalls = new List<Wall>();
+			List<Vertex> loopVertices = new List<Vertex>();
+			HashSet<Wall> used = new HashSet<Wall>();
+
+			Wall startWall = input[0];
+			Vertex startV = startWall.from.vertex;
+			Vertex curV = startV;
+			Wall cur = startWall;
+
+			int maxSteps = input.Count * 2;
+			for(int step = 0; step < maxSteps; ++step)
+			{
+				loopWalls.Add(cur);
+				used.Add(cur);
+
+				// 记录当前顶点。
+				loopVertices.Add(curV);
+
+				// 找到当前边的另一端。
+				Vertex nextV = (cur.from.vertex == curV) ? cur.to.vertex : cur.from.vertex;
+
+				// 如果所有边都用完且回到了起点，则闭环成功。
+				if(used.Count == input.Count && nextV == startV)
+					break;
+
+				// 否则在 nextV 处找下一条未用边。
+				if(!adj.TryGetValue(nextV, out var listNext))
+				{
+					Debug.LogWarning("CreateRoomFromWalls: adjacency broken.");
+					return null;
+				}
+
+				Wall next = null;
+				foreach(var e in listNext)
+				{
+					if(!used.Contains(e))
+					{
+						next = e;
+						break;
+					}
+				}
+
+				if(next == null)
+				{
+					Debug.LogWarning("CreateRoomFromWalls: cannot traverse a full loop.");
+					return null;
+				}
+
+				curV = nextV;
+				cur = next;
+			}
+
+			if(used.Count != input.Count)
+			{
+				Debug.LogWarning("CreateRoomFromWalls: not all selected walls are used in a single cycle.");
+				return null;
+			}
+
+			// loopWalls.Count == input.Count，loopVertices.Count == input.Count。
+
+			// 计算一个现有房间的绕序符号，作为全局基准。
+			float baseSign = 0f;
+			foreach(var r in rooms)
+			{
+				var vs = r.GetVertices();
+				if(vs == null || vs.Length < 3)
+					continue;
+
+				float s = 0f;
+				for(int i = 0; i < vs.Length; ++i)
+				{
+					int j = (i + 1) % vs.Length;
+					Vector3 p = vs[i].position;
+					Vector3 q = vs[j].position;
+					s += p.x * q.z - q.x * p.z;
+				}
+				if(Mathf.Abs(s) > Mathf.Epsilon)
+				{
+					baseSign = Mathf.Sign(s);
+					break;
+				}
+			}
+
+			// 计算新环的绕序符号（按 XZ）。
+			float loopSign = 0f;
+			if(loopVertices.Count >= 3)
+			{
+				for(int i = 0; i < loopVertices.Count; ++i)
+				{
+					int j = (i + 1) % loopVertices.Count;
+					Vector3 p = loopVertices[i].position;
+					Vector3 q = loopVertices[j].position;
+					loopSign += p.x * q.z - q.x * p.z;
+				}
+			}
+
+			// 若已有基准，且新环方向相反，则翻转一次，使其与全局一致。
+			if(baseSign != 0f && Mathf.Abs(loopSign) > Mathf.Epsilon && Mathf.Sign(loopSign) != Mathf.Sign(baseSign))
+			{
+				loopWalls.Reverse();
+				loopVertices.Reverse();
+			}
+
+			// 临时构造一个房间对象，用 Room.IsWallFlipped 来判断新房间中每条墙的走向。
+			Room tempRoom = new Room
+			{
+				generateFloor = true,
+				generateCeiling = true,
+				walls = new List<Wall>(loopWalls),
+			};
+
+			// 检查与现有房间是否重叠：
+			// 若存在某条墙，在新房间与某个已有房间中的走向相同，则视为重叠。
+			for(int i = 0; i < loopWalls.Count; ++i)
+			{
+				Wall w = loopWalls[i];
+				bool flippedNew = tempRoom.IsWallFlipped(i);
+				int dirNew = flippedNew ? -1 : 1;
+
+				// 找出所有使用这条墙的已有房间。
+				foreach(var r in FindRoomsUsingWall(w))
+				{
+					int idx = r.walls.IndexOf(w);
+					if(idx < 0)
+						continue;
+
+					bool flippedOld = r.IsWallFlipped(idx);
+					int dirOld = flippedOld ? -1 : 1;
+
+					if(dirNew == dirOld)
+					{
+						Debug.LogWarning("CreateRoomFromWalls: new room would overlap an existing room (same wall orientation).");
+						return null;
+					}
+				}
+			}
+
+			// 通过所有检查，正式创建房间。
+			Room newRoom = new Room
+			{
+				generateFloor = true,
+				generateCeiling = true,
+				walls = loopWalls,
+			};
+
+			rooms.Add(newRoom);
+			return newRoom;
 		}
 
 		#endregion

@@ -19,7 +19,7 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Generation
-		[SerializeField, Expanded] public InteriorStructure config = new();
+		[SerializeField, ReadOnlyInInspector, Expanded] public InteriorStructure config = new();
 
 		DynamicMesh mesh;
 		Dictionary<string, Material> materialMap;

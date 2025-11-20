@@ -56,7 +56,7 @@ namespace Nianyi.UnityPack
 		[System.Serializable]
 		public class Wall : IGeometry
 		{
-			public End from, to;
+			[HideInInspector] public End from, to;
 			public bool fill = true;
 			[Min(0)] public float thickness = 0.25f;
 			public List<Hole> holes;
