@@ -87,7 +87,7 @@ namespace Nianyi.UnityPack
 				InteriorStructure.Wall
 					wall = walls[i],
 					next = walls[(i + 1) % count];
-				bool flipped = !(wall.to.vertex == next.from.vertex || wall.to.vertex == next.to.vertex);
+				bool flipped = room.IsWallFlipped(i);
 
 				var fromVert = mesh.CreateVertex((flipped ? wall.to : wall.from).vertex.position);
 

@@ -1,6 +1,7 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
+using static Nianyi.UnityPack.InteriorStructure;
 
 namespace Nianyi.UnityPack
 {
@@ -23,8 +24,32 @@ namespace Nianyi.UnityPack
 		{
 			public bool generateFloor = true;
 			public bool generateCeiling = true;
+
 			[SerializeField] public List<int> wallIndices;
 			[System.NonSerialized] public List<Wall> walls;
+
+			public Vertex[] Vertices
+			{
+				get
+				{
+					Vertex[] vertices = new Vertex[walls.Count];
+					for(int i = 0; i < walls.Count; ++i)
+					{
+						var w = walls[i];
+						vertices[i] = (IsWallFlipped(i) ? w.to : w.from).vertex;
+					}
+					return vertices;
+				}
+			}
+
+			public bool IsWallFlipped(int i)
+			{
+				if(i < 0 || i >= walls.Count)
+					return false;
+				Wall w = walls[i], next = walls[(i + 1) % walls.Count];
+				return !(w.to.vertex == next.from.vertex || w.to.vertex == next.to.vertex);
+			}
+			public bool IsWallFlipped(Wall w) => IsWallFlipped(walls.IndexOf(w));
 		}
 
 		[System.Serializable]
@@ -41,6 +66,8 @@ namespace Nianyi.UnityPack
 				[SerializeField] public int vertexIndex;
 				[System.NonSerialized] public Vertex vertex;
 				public float height = 3f;
+
+				public Vector3 Position => vertex.position;
 			}
 
 			[System.Serializable]

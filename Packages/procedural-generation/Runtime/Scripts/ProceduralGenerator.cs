@@ -33,7 +33,12 @@ namespace Nianyi.UnityPack
 #if UNITY_EDITOR
 		protected void OnValidate()
 		{
-			UnityEditor.EditorApplication.delayCall += UpdateGeneration;
+			UnityEditor.EditorApplication.delayCall += () =>
+			{
+				if(UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+					return;
+				UpdateGeneration();
+			};
 		}
 #endif
 		#endregion
