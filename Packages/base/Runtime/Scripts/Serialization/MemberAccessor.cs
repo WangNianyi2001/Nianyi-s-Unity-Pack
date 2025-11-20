@@ -13,38 +13,34 @@ namespace Nianyi.UnityPack
 {
 	public class MemberAccessor
 	{
-		struct MatchPattern
+		static readonly Regex
+			memberPattern = new(@"^\.([_a-zA-Z][_a-zA-Z\d]*)"),
+			indexPattern = new(@"^\[(0|(?:[1-9]\d*))\]");
+		static List<Step> PathFromString(string path)
 		{
-			public Regex loose, strict;
-
-			public MatchPattern(string pattern)
+			var paths = new List<Step>();
+			for(; path.Length > 0;)
 			{
-				loose = new Regex($"({pattern}).*");
-				strict = new Regex($"{pattern}");
-			}
-		}
-		static MatchPattern
-			memberPattern = new(@"\.([_a-zA-Z][_a-zA-Z\d]*)"),
-			indexPattern = new(@"\[(0|(?:[1-9]\d*))\]");
-		static List<string> PathFromString(string path)
-		{
-			var paths = new List<string>();
-			for(int i = 0; i < path.Length;)
-			{
-				var memberMatch = memberPattern.loose.Match(path, i);
+				var memberMatch = memberPattern.Match(path);
 				if(memberMatch.Success)
 				{
-					string member = memberMatch.Groups[1].Value;
-					i += member.Length;
-					paths.Add(member);
+					paths.Add(new()
+					{
+						type = Step.Type.Member,
+						member = memberMatch.Groups[1].Value,
+					});
+					path = path.Substring(memberMatch.Length);
 					continue;
 				}
-				var indexMatch = indexPattern.loose.Match(path, i);
+				var indexMatch = indexPattern.Match(path);
 				if(indexMatch.Success)
 				{
-					string index = indexMatch.Groups[1].Value;
-					i += index.Length;
-					paths.Add(index);
+					paths.Add(new()
+					{
+						type = Step.Type.Index,
+						index = int.Parse(indexMatch.Groups[1].Value),
+					});
+					path = path.Substring(indexMatch.Length);
 					continue;
 				}
 				throw new FormatException($"Malformed accessor path: {path}");
@@ -58,33 +54,6 @@ namespace Nianyi.UnityPack
 			public Type type;
 			public string member;
 			public int index;
-
-			void Init(string step)
-			{
-				var indexMatch = indexPattern.strict.Match(step);
-				if(indexMatch.Success)
-				{
-					type = Type.Index;
-					index = Convert.ToInt32(indexMatch.Groups[1].Value);
-					return;
-				}
-				var memberMatch = memberPattern.strict.Match(step);
-				if(memberMatch.Success)
-				{
-					type = Type.Member;
-					member = memberMatch.Groups[1].Value;
-					return;
-				}
-				throw new FormatException($"Malformed accessor path step: {step}");
-			}
-
-			public Step(string step)
-			{
-				type = Type.None;
-				member = null;
-				index = -1;
-				Init(step);
-			}
 
 			const BindingFlags bindingFlagsDontCare = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
 			private static MemberInfo FindMember(System.Type type, string name)
@@ -172,9 +141,6 @@ namespace Nianyi.UnityPack
 			if(this.path.Length == 0)
 				throw new IndexOutOfRangeException("Path of a member accessor must be non-empty");
 		}
-		public MemberAccessor(object root, IEnumerable<string> path) :
-			this(root, path?.Select(step => new Step(step)).ToArray())
-		{ }
 		public MemberAccessor(object root, string path) :
 			this(root, PathFromString(path))
 		{ }
@@ -219,7 +185,7 @@ namespace Nianyi.UnityPack
 		{
 			var newPath = path
 				.Take(path.Length - backard)
-				.Concat(PathFromString(forward).Select(step => new Step(step)));
+				.Concat(PathFromString(forward));
 			return new MemberAccessor(root, newPath);
 		}
 
