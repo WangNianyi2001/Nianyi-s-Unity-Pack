@@ -5,7 +5,7 @@ using System.Linq;
 namespace Nianyi.UnityPack
 {
 	[System.Serializable]
-	public class InteriorStructure : ISerializationCallbackReceiver
+	public partial class InteriorStructure : ISerializationCallbackReceiver
 	{
 		[Header("Materials")]
 		public Material defaultFloorMaterial;
@@ -14,9 +14,9 @@ namespace Nianyi.UnityPack
 		public Material defaultInsetMaterial;
 
 		[Header("Geometry")]
-		public List<Vertex> vertices;
-		public List<Wall> walls;
-		public List<Room> rooms;
+		public List<Vertex> vertices = new();
+		public List<Wall> walls = new();
+		public List<Room> rooms = new();
 
 		public interface IGeometry
 		{
@@ -66,6 +66,22 @@ namespace Nianyi.UnityPack
 				return new Vertex[2] { from.vertex, to.vertex };
 			}
 
+			public float Length => Vector3.Distance(from.Position, to.Position);
+			public Vector3 Span => to.Position - from.Position;
+			public Vector3 Normal => Vector3.Cross(Span, Vector3.up).normalized;
+
+			public Rect GetHoleArea(Hole h)
+			{
+				float x = Length * h.x;
+				return new()
+				{
+					xMin = x - h.width * .5f,
+					xMax = x + h.width * .5f,
+					yMin = h.yMin,
+					yMax = h.yMax,
+				};
+			}
+
 			[System.Serializable]
 			public class End
 			{
@@ -77,9 +93,13 @@ namespace Nianyi.UnityPack
 			}
 
 			[System.Serializable]
-			public struct Hole
+			public class Hole
 			{
-				public Rect area;
+				[Range(0, 1)] public float x;
+				[Min(0)] public float width;
+				[Min(0)] public float yMin, yMax;
+				public bool flipped;
+				public GameObject filler;
 			}
 		}
 
@@ -110,6 +130,10 @@ namespace Nianyi.UnityPack
 		public void OnBeforeSerialize()
 		{
 			// TODO: Performance boost, if turned out to be an issue.
+
+			vertices ??= new();
+			walls ??= new();
+			rooms ??= new();
 
 			foreach(var room in rooms)
 				room.wallIndices = room.walls.Select(wall => walls.IndexOf(wall)).ToList();

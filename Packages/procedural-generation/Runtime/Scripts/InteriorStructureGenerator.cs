@@ -19,7 +19,7 @@ namespace Nianyi.UnityPack
 		#endregion
 
 		#region Generation
-		[SerializeField, Expanded] public InteriorStructure config;
+		[SerializeField, Expanded] public InteriorStructure config = new();
 
 		DynamicMesh mesh;
 		Dictionary<string, Material> materialMap;
@@ -166,41 +166,37 @@ namespace Nianyi.UnityPack
 		void GenerateWall(WallContext context)
 		{
 			var wall = context.wall;
-			Vector3 span = wall.to.vertex.position - wall.from.vertex.position;
-			float length = span.magnitude;
 			float hFrom = wall.from.height, hTo = wall.to.height;
 
 			List<DynamicMesh.Vertex> vertices = new();
 			List<DynamicMesh.Face> faces = new();
 
 			var holes = new List<InteriorStructure.Wall.Hole>(wall.holes);
-			holes.Sort((a, b) => a.area.center.x < b.area.center.x ? -1 : 1);
+			holes.Sort((a, b) => wall.GetHoleArea(a).center.x < wall.GetHoleArea(b).center.x ? -1 : 1);
 			for(int i = 1; i < holes.Count; ++i)
 			{
 				while(i < holes.Count)
 				{
-					if(holes[i].area.xMin >= holes[i - 1].area.xMin)
+					if(wall.GetHoleArea(holes[i]).xMin >= wall.GetHoleArea(holes[i - 1]).xMin)
 						break;
 					holes.RemoveAt(i);
 				}
 			}
 
 			if(holes.Count == 0)
-				GenerateSolidSection(0, length);
+				GenerateSolidSection(0, wall.Length);
 			else
 			{
-				GenerateSolidSection(0, holes[0].area.xMin);
+				GenerateSolidSection(0, wall.GetHoleArea(holes[0]).xMin);
 				for(int i = 0; i < holes.Count; ++i)
 				{
-					var area = holes[i].area;
+					var area = wall.GetHoleArea(holes[i]);
 					GenerateHoleSection(area.xMin, area.xMax, area.yMin, area.yMax);
 					if(i + 1 != holes.Count)
-						GenerateSolidSection(area.xMax, holes[i + 1].area.xMin);
+						GenerateSolidSection(area.xMax, wall.GetHoleArea(holes[i + 1]).xMin);
 				}
-				GenerateSolidSection(holes[holes.Count - 1].area.xMax, length);
+				GenerateSolidSection(wall.GetHoleArea(holes[^1]).xMax, wall.Length);
 			}
-
-			Vector3 normal = Vector3.Cross(span, Vector3.up);
 
 			if(!context.flipped)
 			{
@@ -209,7 +205,7 @@ namespace Nianyi.UnityPack
 			}
 			Matrix4x4 transform = Matrix4x4.TRS(
 				wall.from.vertex.position + context.normal * (wall.thickness * .5f),
-				Quaternion.LookRotation(normal), Vector3.one
+				Quaternion.LookRotation(wall.Normal), Vector3.one
 			);
 			mesh.TransformVertices(transform, default, vertices);
 
@@ -239,7 +235,7 @@ namespace Nianyi.UnityPack
 
 			float GetHeightAt(float x)
 			{
-				return Mathf.Lerp(hFrom, hTo, x / length);
+				return Mathf.Lerp(hFrom, hTo, x / wall.Length);
 			}
 		}
 		#endregion

@@ -22,6 +22,7 @@ namespace Nianyi.UnityPack.Editor
 
 		#region Status
 		InteriorStructureGenerator generator;
+		InteriorStructure Structure => generator.config;
 		bool isEditing = false;
 
 		#region Selection mode
@@ -31,9 +32,9 @@ namespace Nianyi.UnityPack.Editor
 
 		IEnumerable<IGeometry> GeometriesOfCurrentType => mode switch
 		{
-			SelectionMode.Vertices => generator.config.vertices,
-			SelectionMode.Walls => generator.config.walls,
-			SelectionMode.Rooms => generator.config.rooms,
+			SelectionMode.Vertices => Structure.vertices,
+			SelectionMode.Walls => Structure.walls,
+			SelectionMode.Rooms => Structure.rooms,
 			_ => throw new System.NotImplementedException(),
 		};
 
@@ -91,7 +92,7 @@ namespace Nianyi.UnityPack.Editor
 						break;
 					case SelectionMode.Walls:
 						selectedWalls.Clear();
-						foreach(var w in generator.config.walls)
+						foreach(var w in Structure.walls)
 						{
 							if(vertices.Contains(w.from.vertex) && vertices.Contains(w.to.vertex))
 								selectedWalls.Add(w);
@@ -99,7 +100,7 @@ namespace Nianyi.UnityPack.Editor
 						break;
 					case SelectionMode.Rooms:
 						selectedRooms.Clear();
-						foreach(var r in generator.config.rooms)
+						foreach(var r in Structure.rooms)
 						{
 							if(r.GetVertices().All(v => vertices.Contains(v)))
 								selectedRooms.Add(r);
@@ -149,6 +150,12 @@ namespace Nianyi.UnityPack.Editor
 					isEditing = !isEditing;
 					SceneView.RepaintAll();
 				}
+
+				if(isEditing)
+				{
+					DrawEditGui();
+					EditorGUILayout.Space();
+				}
 			}
 			base.OnInspectorGUI();
 		}
@@ -168,8 +175,6 @@ namespace Nianyi.UnityPack.Editor
 
 			DrawMoveControl();
 
-			DrawEditPanel(GetEditPanelArea());
-
 			Event e = Event.current;
 			switch(e.type)
 			{
@@ -181,56 +186,112 @@ namespace Nianyi.UnityPack.Editor
 		#endregion
 
 		#region GUI drawing
-		Rect GetEditPanelArea()
+		int subdivisionCount;
+
+		void DrawEditGui()
 		{
-			var sceneWindow = EditorWindow.GetWindow<SceneView>();
-			var windowArea = sceneWindow.position.size;
+			// Header
+			GUILayout.Label("Edit", new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold, });
 
-			float width = 300f, height = 250f, margin = 10f;
-			return new(
-				windowArea.x - width - margin,
-				windowArea.y - height - margin,
-				width,
-				height
-			);
-		}
-
-		void DrawEditPanel(Rect area)
-		{
-			Handles.BeginGUI();
-			GUILayout.BeginArea(area, GUI.skin.box);
-
-			GUILayout.Label("Interior Structure Edit Panel", new GUIStyle(GUI.skin.label)
-			{
-				fontStyle = FontStyle.Bold,
-				fontSize = Mathf.FloorToInt(GUI.skin.label.fontSize * 1.25f),
-			});
-
-			GUILayout.Label("Selection Mode");
+			// Selection
+			GUILayout.Label("Selection mode");
 			using(new GUILayout.HorizontalScope())
 			{
 				if(GUILayout.Toggle(Mode == SelectionMode.Vertices, "Vertices"))
 					Mode = SelectionMode.Vertices;
-
 				if(GUILayout.Toggle(Mode == SelectionMode.Walls, "Walls"))
 					Mode = SelectionMode.Walls;
-
 				if(GUILayout.Toggle(Mode == SelectionMode.Rooms, "Rooms"))
 					Mode = SelectionMode.Rooms;
 			}
 
+			// Selection-ex
+			if(Structure.vertices.Count == 0)
+			{
+				if(GUILayout.Button("Create default room"))
+				{
+					RecordBeforeUndo("Create default room");
+					Structure.CreateDefaultRoom();
+					ReportChange();
+				}
+			}
+			else
+			{
+				if(GUILayout.Button("Prune geometries"))
+				{
+					RecordBeforeUndo("Prune geometries");
+					Structure.PruneGeometries();
+					ReportChange();
+				}
+			}
+
+			// Mode-specific
 			switch(Mode)
 			{
 				case SelectionMode.Vertices:
+					if(GUILayout.Button("Dissolve vertices"))
+					{
+						RecordBeforeUndo("Dissolve vertices");
+						foreach(var v in selectedVertices)
+							Structure.DissolveVertex(v);
+						ReportChange();
+					}
+					if(GUILayout.Button("Delete vertices"))
+					{
+						if(EditorUtility.DisplayDialog("Confirm", "Delete vertices?", "Delete", "Cancel"))
+						{
+							RecordBeforeUndo("Delete vertices");
+							foreach(var v in selectedVertices)
+								Structure.DeleteVertex(v);
+							ReportChange();
+						}
+					}
 					break;
 				case SelectionMode.Walls:
+					if(GUILayout.Button("Extrude"))
+					{
+						RecordBeforeUndo("Extrue walls");
+						var extruded = Structure.ExtrudeWalls(selectedWalls.ToArray(), default);
+						selectedWalls.Clear();
+						foreach(var w in extruded)
+							selectedWalls.Add(w);
+						ReportChange();
+					}
+					if(GUILayout.Button("Delete walls"))
+					{
+						if(EditorUtility.DisplayDialog("Confirm", "Delete walls?", "Delete", "Cancel"))
+						{
+							RecordBeforeUndo("Delete walls");
+							foreach(var w in selectedWalls)
+								Structure.DeleteWall(w);
+							ReportChange();
+						}
+					}
+					using(new GUILayout.HorizontalScope())
+					{
+						subdivisionCount = Mathf.Max(1, EditorGUILayout.IntField(subdivisionCount));
+						if(GUILayout.Button("Subdvide"))
+						{
+							RecordBeforeUndo("Subdivide walls");
+							foreach(var w in selectedWalls)
+								Structure.SubdivideWallEvenly(w, subdivisionCount);
+							ReportChange();
+						}
+					}
 					break;
 				case SelectionMode.Rooms:
+					if(GUILayout.Button("Delete rooms"))
+					{
+						if(EditorUtility.DisplayDialog("Confirm", "Delete rooms?", "Delete", "Cancel"))
+						{
+							RecordBeforeUndo("Delete rooms");
+							foreach(var r in selectedRooms)
+								Structure.DeleteRoom(r);
+							ReportChange();
+						}
+					}
 					break;
 			}
-
-			GUILayout.EndArea();
-			Handles.EndGUI();
 		}
 
 		void DrawGeometry(IGeometry g)
@@ -256,7 +317,7 @@ namespace Nianyi.UnityPack.Editor
 							dist = HandleUtility.DistanceToCircle(vertices[0], HandleUtility.GetHandleSize(vertices[0]) * vertexSize);
 							break;
 						case 2:
-							dist = HandleUtility.DistancePointToLine(mouse, vertices[0], vertices[1]);
+							dist = Mathf.Max(0, HandleUtility.DistanceToLine(vertices[0], vertices[1]) - wallThickness + 1);
 							break;
 						default:
 							Vector2[] poly = vertices.Select(p => HandleUtility.WorldToGUIPoint(p)).ToArray();
@@ -331,7 +392,7 @@ namespace Nianyi.UnityPack.Editor
 
 			if(EditorGUI.EndChangeCheck())
 			{
-				Undo.RecordObject(generator, "Move interior structure vertices");
+				RecordBeforeUndo("Move interior structure vertices");
 
 				Vector3 deltaWorld = newPivot - pivot;
 				Vector3 deltaLocal = generator.transform.InverseTransformVector(deltaWorld);
@@ -339,12 +400,22 @@ namespace Nianyi.UnityPack.Editor
 				foreach(var v in verts)
 					v.position += deltaLocal;
 
-				generator.UpdateGeneration();
+				ReportChange();
 			}
 		}
 		#endregion
 
 		#region Auxiliary
+		void RecordBeforeUndo(string undoName)
+		{
+			Undo.RecordObject(generator, undoName);
+		}
+
+		void ReportChange()
+		{
+			generator.UpdateGeneration();
+		}
+
 		static void DrawPolygon(Vector3[] poly)
 		{
 			DynamicMesh mesh = new();
