@@ -56,7 +56,7 @@ namespace Nianyi.UnityPack
 			{
 				mesh.SetUVs(i, corners.Select(c =>
 				{
-					if(c.uv != null & c.uv.Length > i)
+					if(c.uv != null && c.uv.Length > i)
 						return c.uv[i];
 					return default;
 				}).ToList());
@@ -70,7 +70,7 @@ namespace Nianyi.UnityPack
 				mesh.RecalculateNormals();
 			mesh.RecalculateBounds();
 
-			materialMap = materialIndexMap.Keys.ToArray();
+			materialMap = materials;
 		}
 		#endregion
 	}

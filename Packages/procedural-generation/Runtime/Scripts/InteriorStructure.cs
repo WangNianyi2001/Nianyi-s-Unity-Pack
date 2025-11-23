@@ -20,7 +20,9 @@ namespace Nianyi.UnityPack
 		public class Room : IGeometry
 		{
 			public bool generateFloor = true;
+			public float floorThickness = 0.25f;  // The depth between the floor's upward surface and the downward outside surface.
 			public bool generateCeiling = true;
+			public float ceilingThickness = 0.25f;  // Save as above, reversed.
 
 			public bool overrideFloorMaterial = false;
 			[ShowWhen(nameof(overrideFloorMaterial))] public Material floorMaterial;
