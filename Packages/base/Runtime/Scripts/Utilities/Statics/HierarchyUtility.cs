@@ -37,6 +37,25 @@ namespace Nianyi.UnityPack
 #endif
 			Object.Destroy(target);
 		}
+
+		public static GameObject InstantiatePrefabFromResource(string path)
+		{
+			GameObject template = Resources.Load<GameObject>(path);
+			if(template == null)
+				return null;
+			return Object.Instantiate(template);
+		}
+
+		public static T InstantiatePrefabFromResource<T>(string path, bool force = true) where T : Component
+		{
+			var prefab = InstantiatePrefabFromResource(path);
+			if(!prefab)
+				return null;
+			if(force)
+				return prefab.EnsureComponent<T>();
+			else
+				return prefab.GetComponent<T>();
+		}
 		#endregion
 
 		#region Genealogy
@@ -85,6 +104,11 @@ namespace Nianyi.UnityPack
 			component = target.AddComponent<T>();
 			return true;
 		}
+		public static T EnsureComponent<T>(this GameObject target) where T : Component
+		{
+			target.EnsureComponent<T>(out var component);
+			return component;
+		}
 
 		public static bool RemoveComponent<T>(this GameObject target) where T : Component
 		{
@@ -106,6 +130,20 @@ namespace Nianyi.UnityPack
 			Destroy(component);
 			component = null;
 			return true;
+		}
+		#endregion
+
+		#region Transform
+		public static bool IsOnScreen(this Transform transform, Camera cam = null)
+		{
+			if(cam == null)
+				cam = Camera.main;
+			if(cam == null)
+				return false;
+			Vector3 scr = cam.WorldToScreenPoint(transform.position);
+			if(scr.z <= 0)
+				return false;
+			return scr.x.InRange(0, Screen.width) && scr.y.InRange(0, Screen.height);
 		}
 		#endregion
 	}

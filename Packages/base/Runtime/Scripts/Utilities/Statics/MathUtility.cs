@@ -13,9 +13,21 @@ namespace Nianyi.UnityPack
 		/// The result always lies in <c>[0, b)</c>, given that <c>b</c> is positive.
 		/// For example, <c>Mod(360f, -361f)</c> yields <c>359</c> instead of <c>-1</c>.
 		/// </remarks>
-		public static float Mod(in float a, in float b)
+		public static float Mod(in this float a, in float b)
 		{
 			return a - b * Mathf.Floor(a / b);
+		}
+
+		public static bool InRange(in this float value, in Vector2 range)
+			=> InRange(value, range.x, range.y);
+		public static bool InRange(in this float value, in float min, in float max)
+		{
+			return value >= min && value <= max;
+		}
+
+		public static float Clamp(in float value, in Vector2 range)
+		{
+			return Mathf.Clamp(value, range.x, range.y);
 		}
 		#endregion
 
