@@ -22,8 +22,10 @@ namespace Nianyi.UnityPack
 		[SerializeField, HideInInspector] MeshFilter meshFilter;
 		[SerializeField, HideInInspector] MeshRenderer meshRenderer;
 		[SerializeField, HideInInspector] Mesh outputMesh;
+		#endregion
 
-		void SetupReferences()
+		#region Interfaces
+		public override void NewGeneration()
 		{
 			HierarchyUtility.EnsureComponent(gameObject, out meshFilter);
 			HierarchyUtility.EnsureComponent(gameObject, out meshRenderer);
@@ -32,29 +34,9 @@ namespace Nianyi.UnityPack
 			outputMesh.name = name;
 			meshFilter.sharedMesh = outputMesh;
 		}
-		#endregion
 
-		#region Generation
-
-		DynamicMesh mesh;
-		Dictionary<string, Material> materialMap;
-
-		public override void DestroyGeneration()
+		public override void UpdateGeneration()
 		{
-			HierarchyUtility.Destroy(meshRenderer);
-			meshRenderer = null;
-
-			HierarchyUtility.Destroy(meshFilter);
-			meshFilter = null;
-
-			HierarchyUtility.Destroy(outputMesh);
-			outputMesh = null;
-		}
-
-		public override void Generate()
-		{
-			SetupReferences();
-
 			mesh = new();
 			materialMap = new()
 			{
@@ -72,6 +54,16 @@ namespace Nianyi.UnityPack
 				.Select(name => materialMap.ContainsKey(name) ? materialMap[name] : null)
 				.ToArray();
 		}
+
+		public override void DestroyGeneration()
+		{
+			HierarchyUtility.Destroy(outputMesh);
+		}
+		#endregion
+
+		#region Generation
+		DynamicMesh mesh;
+		Dictionary<string, Material> materialMap;
 
 		class WallContext
 		{

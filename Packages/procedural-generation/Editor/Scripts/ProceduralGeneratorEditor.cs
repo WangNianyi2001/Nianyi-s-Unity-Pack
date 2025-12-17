@@ -11,16 +11,8 @@ namespace Nianyi.UnityPack
 		protected void DrawHeaderButtons()
 		{
 			EditorGUILayout.BeginHorizontal();
-			if(GUILayout.Button("Regenerate"))
-				Generator.Generate();
-			if(GUILayout.Button("Ungarrison"))
-			{
-				if(EditorUtility.DisplayDialog("Confirm", "Sure to ungarrison?", "Yes", "Cancel"))
-				{
-					Generator.Ungarrison();
-					Undo.RegisterFullObjectHierarchyUndo(target, $"Ungarrison {target.name}");
-				}
-			}
+			if(GUILayout.Button("Update generation"))
+				Generator.UpdateGeneration();
 			EditorGUILayout.EndHorizontal();
 		}
 

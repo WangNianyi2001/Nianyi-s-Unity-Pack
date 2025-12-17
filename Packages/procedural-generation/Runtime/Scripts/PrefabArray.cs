@@ -14,11 +14,16 @@ namespace Nianyi.UnityPack
 
 	public class PrefabArray : ProceduralGenerator
 	{
-		#region Generation
 		[SerializeField, Expanded] PrefabArrayConfig config = new();
 		[SerializeField, HideInInspector] List<GameObject> instances = new();
 
-		public override void Generate()
+		#region Interfaces
+		public override void NewGeneration()
+		{
+		}
+
+		// TODO: Make additive.
+		public override void UpdateGeneration()
 		{
 			DestroyGeneration();
 
@@ -44,6 +49,7 @@ namespace Nianyi.UnityPack
 				HierarchyUtility.Destroy(child.gameObject);
 			instances.Clear();
 		}
+		#endregion
 
 		IEnumerable<Vector3Int> EnumerateNaturalCoordinates(Vector3Int bounds)
 		{
@@ -58,6 +64,5 @@ namespace Nianyi.UnityPack
 				}
 			}
 		}
-		#endregion
 	}
 }

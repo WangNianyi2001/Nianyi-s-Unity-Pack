@@ -1,7 +1,7 @@
-using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Nianyi.UnityPack.Editor
 {
@@ -146,7 +146,7 @@ namespace Nianyi.UnityPack.Editor
 
 			if(!EditorApplication.isPlayingOrWillChangePlaymode)
 			{
-				if(GUILayout.Button("Toggle Edit Mode", new GUIStyle(GUI.skin.button)
+				if(GUILayout.Button("Toggle edit mode", new GUIStyle(GUI.skin.button)
 				{
 					fontStyle = isEditing ? FontStyle.Bold : FontStyle.Normal,
 				}))
@@ -497,7 +497,7 @@ namespace Nianyi.UnityPack.Editor
 
 		void ReportChange()
 		{
-			generator.Generate();
+			generator.NewGeneration();
 		}
 
 		void TriggerInspectorRefresh()
