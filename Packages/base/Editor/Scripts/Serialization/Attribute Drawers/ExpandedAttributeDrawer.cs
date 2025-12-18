@@ -50,7 +50,8 @@ namespace Nianyi.UnityPack.Editor
 			{
 				do
 				{
-					sum += EditorGUIUtility.standardVerticalSpacing + EditorGUI.GetPropertyHeight(it, label, true);
+					sum += EditorGUIUtility.standardVerticalSpacing;
+					sum += EditorGUI.GetPropertyHeight(it, label, true);
 				}
 				while(it.NextVisible(false) && !SerializedProperty.EqualContents(it, end));
 			}
@@ -66,17 +67,20 @@ namespace Nianyi.UnityPack.Editor
 				return;
 			}
 
+			// Header
 			position.height = EditorGUIUtility.singleLineHeight;
-			GUIStyle labelStyle = new GUIStyle(GUI.skin.label) { fontStyle = FontStyle.Bold };
+			GUIStyle labelStyle = new(GUI.skin.label) { fontStyle = FontStyle.Bold };
 			if(IsReferenceType(property))
 			{
-				// TODO: Use bold style.
+				// TODO: Make bold.
 				EditorGUI.ObjectField(position, property, label);
 			}
 			else
 				EditorGUI.LabelField(position, label, labelStyle);
 			position.y += position.height;
 
+			// Content
+			// TODO: Support deflating SO.
 			if(IsNotNull(property))
 			{
 				++EditorGUI.indentLevel;

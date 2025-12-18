@@ -1,6 +1,6 @@
 {
-  "name": "com.wangnianyi2001.unity-pack.character-control",
-  "displayName": "Nianyi's Unity Pack - Character Control",
+  "name": "com.wangnianyi2001.unity-pack.road-system",
+  "displayName": "Nianyi's Unity Pack - Road System",
   "version": "0.0.0",
   "author": {
     "name": "Nianyi Wang",
@@ -9,6 +9,6 @@
   "unity": "2022.3",
   "dependencies": {
     "com.wangnianyi2001.unity-pack.base": ">=0.0.0",
-    "com.unity.inputsystem": ">=1.0.0"
+    "com.wangnianyi2001.unity-pack.dynamic-mesh": ">=0.0.0"
   }
 }

@@ -243,7 +243,7 @@ namespace Nianyi.UnityPack
 					{
 						var target = collision.rigidbody;
 						Vector3 targetVelocity = PhysicsUtility.RigidbodyVelocityAtPoint(collision.position,
-							target.centerOfMass, target.velocity, target.angularVelocity
+							target.centerOfMass, target.linearVelocity, target.angularVelocity
 						);
 						Vector3 relativeVelocity = velocity - targetVelocity;
 						float mu = rigidbody.mass * target.mass / (rigidbody.mass + target.mass);

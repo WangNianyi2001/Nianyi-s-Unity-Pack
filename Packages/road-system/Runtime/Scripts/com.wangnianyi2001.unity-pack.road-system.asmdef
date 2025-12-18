@@ -1,0 +1,16 @@
+{
+    "name": "com.wangnianyi2001.unity-pack.road-system",
+    "rootNamespace": "Nianyi.UnityPack.RoadSystem",
+    "references": [
+        "GUID:d9b92547380df39428cf2d6a1a87be90"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

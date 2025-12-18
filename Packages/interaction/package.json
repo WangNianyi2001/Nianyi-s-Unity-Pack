@@ -6,6 +6,7 @@
     "name": "Nianyi Wang",
     "url": "http://wangnianyi2001.com/"
   },
+  "unity": "2022.3",
   "dependencies": {
     "com.wangnianyi2001.unity-pack.base": ">=0.0.0"
   }

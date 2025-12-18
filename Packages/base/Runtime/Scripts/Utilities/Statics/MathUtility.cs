@@ -29,6 +29,13 @@ namespace Nianyi.UnityPack
 		{
 			return Mathf.Clamp(value, range.x, range.y);
 		}
+
+		public static IEnumerable<float> Interpolate(uint segmentation = 100, float start = 0f, float end = 1f)
+		{
+			for(int i = 0; i < segmentation; ++i)
+				yield return Mathf.Lerp(start, end, (float)i / segmentation);
+			yield return end;
+		}
 		#endregion
 
 		#region Quaternion
@@ -137,6 +144,97 @@ namespace Nianyi.UnityPack
 					min = distance;
 			}
 			return min;
+		}
+		#endregion
+
+		#region Bezier
+		public static float Length(in this Bezier3 bezier)
+			=> TToDistance(bezier, 1f);
+
+		public static Vector3 SampleByT(in this Bezier3 bezier, in float t)
+		{
+			float _t = 1 - t;
+			return
+				Mathf.Pow(_t, 3) * bezier.anchor0 +
+				3 * Mathf.Pow(_t, 2) * t * bezier.cp0 +
+				3 * _t * Mathf.Pow(t, 2) * bezier.cp1 +
+				Mathf.Pow(t, 3) * bezier.anchor1;
+		}
+
+		public static Vector3 SampleByDistance(in this Bezier3 bezier, in float distance)
+			=> SampleByT(bezier, DistanceToT(bezier, distance));
+
+		// GPT-gen
+		public static float TToDistance(in this Bezier3 bezier, in float t)
+		{
+			float tt = Mathf.Clamp01(t);
+			if(tt <= 0f)
+				return 0f;
+
+			// 5-point Gauss–Legendre on [-1, 1]
+			const float x0 = 0.0f;
+			const float x1 = 0.5384693101056831f;
+			const float x2 = 0.9061798459386640f;
+
+			const float w0 = 0.5688888888888889f;
+			const float w1 = 0.4786286704993665f;
+			const float w2 = 0.2369268850561891f;
+
+			static Vector3 Derivative(in Bezier3 b, float u)
+			{
+				float omt = 1f - u;
+				float omt2 = omt * omt;
+				float u2 = u * u;
+
+				// B'(u) = 3(1-u)^2(P1-P0) + 6(1-u)u(P2-P1) + 3u^2(P3-P2)
+				return
+					(3f * omt2) * (b.cp0 - b.anchor0) +
+					(6f * omt * u) * (b.cp1 - b.cp0) +
+					(3f * u2) * (b.anchor1 - b.cp1);
+			}
+
+			float half = 0.5f * tt;
+			float sum = 0f;
+
+			float u0 = half * (x0 + 1f);
+			float u1a = half * (-x1 + 1f);
+			float u1b = half * (x1 + 1f);
+			float u2a = half * (-x2 + 1f);
+			float u2b = half * (x2 + 1f);
+
+			sum += w0 * Derivative(bezier, u0).magnitude;
+			sum += w1 * (Derivative(bezier, u1a).magnitude + Derivative(bezier, u1b).magnitude);
+			sum += w2 * (Derivative(bezier, u2a).magnitude + Derivative(bezier, u2b).magnitude);
+
+			return half * sum;
+		}
+
+		// GPT-gen
+		public static float DistanceToT(in this Bezier3 bezier, in float distance)
+		{
+			float total = TToDistance(bezier, 1f);
+
+			if(distance <= 0f)
+				return 0f;
+			if(distance >= total)
+				return 1f;
+
+			float lo = 0f;
+			float hi = 1f;
+			float mid = 0f;
+
+			for(int i = 0; i < 6; ++i)
+			{
+				mid = 0.5f * (lo + hi);
+				float s = TToDistance(bezier, mid);
+
+				if(s < distance)
+					lo = mid;
+				else
+					hi = mid;
+			}
+
+			return mid;
 		}
 		#endregion
 	}
