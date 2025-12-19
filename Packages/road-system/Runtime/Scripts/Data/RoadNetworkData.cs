@@ -12,14 +12,16 @@ namespace Nianyi.UnityPack.RoadSystem
 		#endregion
 
 		#region Splines
-		[System.NonSerialized] public List<Spline> splines = new();
-		[SerializeField] List<SplineDef> splineDefs;
+		[System.NonSerialized] public List<RoadSpline> roadSplines = new();
+		[SerializeField] List<RoadSplineDef> roadSplineDefs;
 
 		[System.Serializable]
-		public struct SplineDef
+		public struct RoadSplineDef
 		{
 			public string startAddress, endAddress;
 			public Vector3 startCP, endCP;
+
+			public List<RoadSpline.ControlPoint> controlPoints;
 		}
 
 		public INode GetNodeByAddress(string address)
@@ -50,22 +52,34 @@ namespace Nianyi.UnityPack.RoadSystem
 			return null;
 		}
 
-		public void ApplySplineDef(in SplineDef def, Spline spline)
+		public void ApplySplineDef(in RoadSplineDef def, RoadSpline spline)
 		{
 			spline.start = GetNodeByAddress(def.startAddress);
 			spline.end = GetNodeByAddress(def.endAddress);
-			spline.startCP = def.startCP;
-			spline.endCP = def.endCP;
+
+			// Control points
+
+			spline.controlPoints = def.controlPoints.ToList();
+			while(spline.controlPoints.Count < 2)
+				spline.controlPoints.Add(default);
+
+			var startCP = spline.controlPoints[0];
+			startCP.position = spline.start.GetPosition();
+			spline.controlPoints[0] = startCP;
+
+			var endCP = spline.controlPoints[^1];
+			endCP.position = spline.end.GetPosition();
+			spline.controlPoints[^1] = endCP;
 		}
 
-		public SplineDef CreateSplineDef(in Spline spline)
+		public RoadSplineDef CreateSplineDef(in RoadSpline spline)
 		{
-			SplineDef def = new()
+			RoadSplineDef def = new()
 			{
 				startAddress = GetNodeAddress(spline.start),
 				endAddress = GetNodeAddress(spline.end),
-				startCP = spline.startCP,
-				endCP = spline.endCP
+
+				controlPoints = spline.controlPoints.ToList(),
 			};
 			return def;
 		}
@@ -76,22 +90,22 @@ namespace Nianyi.UnityPack.RoadSystem
 		{
 			// Splines
 
-			splines ??= new();
+			roadSplines ??= new();
 
-			if(splines.Count > splineDefs.Count)
-				splines.RemoveRange(splineDefs.Count, splines.Count - splineDefs.Count);
-			else if(splines.Count < splineDefs.Count)
+			if(roadSplines.Count > roadSplineDefs.Count)
+				roadSplines.RemoveRange(roadSplineDefs.Count, roadSplines.Count - roadSplineDefs.Count);
+			else if(roadSplines.Count < roadSplineDefs.Count)
 			{
-				int addCount = splineDefs.Count - splines.Count;
+				int addCount = roadSplineDefs.Count - roadSplines.Count;
 				for(int i = 0; i < addCount; ++i)
-					splines.Add(new());
+					roadSplines.Add(new());
 			}
 
-			for(int i = 0; i < splines.Count; ++i)
+			for(int i = 0; i < roadSplines.Count; ++i)
 			{
-				if(splines[i] == null)
-					splines[i] = new();
-				ApplySplineDef(splineDefs[i], splines[i]);
+				if(roadSplines[i] == null)
+					roadSplines[i] = new();
+				ApplySplineDef(roadSplineDefs[i], roadSplines[i]);
 			}
 		}
 
@@ -99,9 +113,10 @@ namespace Nianyi.UnityPack.RoadSystem
 		{
 			// Spline
 
-			splines ??= new();
+			roadSplines ??= new();
 
-			splineDefs = splines.Select(s => {
+			roadSplineDefs = roadSplines.Select(s =>
+			{
 				if(s == null)
 					return default;
 

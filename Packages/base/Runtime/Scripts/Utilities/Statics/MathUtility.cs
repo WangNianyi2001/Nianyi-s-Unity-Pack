@@ -151,7 +151,7 @@ namespace Nianyi.UnityPack
 		public static float Length(in this Bezier3 bezier)
 			=> TToDistance(bezier, 1f);
 
-		public static Vector3 SampleByT(in this Bezier3 bezier, in float t)
+		public static Vector3 Sample(in this Bezier3 bezier, in float t)
 		{
 			float _t = 1 - t;
 			return
@@ -162,7 +162,24 @@ namespace Nianyi.UnityPack
 		}
 
 		public static Vector3 SampleByDistance(in this Bezier3 bezier, in float distance)
-			=> SampleByT(bezier, DistanceToT(bezier, distance));
+			=> bezier.Sample(bezier.DistanceToT(distance));
+
+		// GPT-gen
+		public static Vector3 Derivative(in this Bezier3 bezier, float t)
+		{
+			float omt = 1f - t;
+			float omt2 = omt * omt;
+			float u2 = t * t;
+
+			// B'(u) = 3(1-u)^2(P1-P0) + 6(1-u)u(P2-P1) + 3u^2(P3-P2)
+			return
+				(3f * omt2) * (bezier.cp0 - bezier.anchor0) +
+				(6f * omt * t) * (bezier.cp1 - bezier.cp0) +
+				(3f * u2) * (bezier.anchor1 - bezier.cp1);
+		}
+
+		public static Vector3 DerivativeByDistance(in this Bezier3 bezier, float distance)
+			=> bezier.Derivative(bezier.DistanceToT(distance));
 
 		// GPT-gen
 		public static float TToDistance(in this Bezier3 bezier, in float t)
@@ -180,19 +197,6 @@ namespace Nianyi.UnityPack
 			const float w1 = 0.4786286704993665f;
 			const float w2 = 0.2369268850561891f;
 
-			static Vector3 Derivative(in Bezier3 b, float u)
-			{
-				float omt = 1f - u;
-				float omt2 = omt * omt;
-				float u2 = u * u;
-
-				// B'(u) = 3(1-u)^2(P1-P0) + 6(1-u)u(P2-P1) + 3u^2(P3-P2)
-				return
-					(3f * omt2) * (b.cp0 - b.anchor0) +
-					(6f * omt * u) * (b.cp1 - b.cp0) +
-					(3f * u2) * (b.anchor1 - b.cp1);
-			}
-
 			float half = 0.5f * tt;
 			float sum = 0f;
 
@@ -202,9 +206,9 @@ namespace Nianyi.UnityPack
 			float u2a = half * (-x2 + 1f);
 			float u2b = half * (x2 + 1f);
 
-			sum += w0 * Derivative(bezier, u0).magnitude;
-			sum += w1 * (Derivative(bezier, u1a).magnitude + Derivative(bezier, u1b).magnitude);
-			sum += w2 * (Derivative(bezier, u2a).magnitude + Derivative(bezier, u2b).magnitude);
+			sum += w0 * bezier.Derivative(u0).magnitude;
+			sum += w1 * (bezier.Derivative(u1a).magnitude + bezier.Derivative(u1b).magnitude);
+			sum += w2 * (bezier.Derivative(u2a).magnitude + bezier.Derivative(u2b).magnitude);
 
 			return half * sum;
 		}
@@ -223,7 +227,7 @@ namespace Nianyi.UnityPack
 			float hi = 1f;
 			float mid = 0f;
 
-			for(int i = 0; i < 6; ++i)
+			for(int i = 0; i < 16; ++i)
 			{
 				mid = 0.5f * (lo + hi);
 				float s = TToDistance(bezier, mid);

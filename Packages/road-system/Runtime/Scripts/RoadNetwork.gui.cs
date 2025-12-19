@@ -12,36 +12,49 @@ namespace Nianyi.UnityPack.RoadSystem
 			if(roadNetworkAsset == null)
 				return;
 
+			Gizmos.matrix = transform.localToWorldMatrix;
+
 			// Anchor nodes
 
 			Gizmos.color = new(1, 0, 0, .5f);
 			foreach(var node in Data.anchorNodes)
 			{
-				Gizmos.DrawSphere(transform.TransformPoint(node.GetPosition()), 0.5f);
+				Gizmos.DrawSphere(node.GetPosition(), 0.5f);
 			}
 
 			// Splines
 
-			foreach(var spline in Data.splines)
+			foreach(var spline in Data.roadSplines)
 			{
-				Vector3 start = transform.TransformPoint(spline.start.GetPosition());
-				Vector3 end = transform.TransformPoint(spline.end.GetPosition());
-				Vector3 startCP = start + transform.TransformVector(spline.startCP);
-				Vector3 endCP = end + transform.TransformVector(spline.endCP);
-
 				// Control points
-				Gizmos.color = new(0, 1, 1, .5f);
-				Gizmos.DrawLine(start, startCP);
-				Gizmos.DrawSphere(startCP, 0.1f);
-				Gizmos.DrawLine(end, endCP);
-				Gizmos.DrawSphere(endCP, 0.1f);
+				foreach(var cp in spline.controlPoints)
+				{
+					// Point
+					Gizmos.color = new(0, 1, 1, .5f);
+					Gizmos.DrawSphere(cp.position, 0.25f);
 
-				// Line
-				Gizmos.color = new(1, 1, 0, .5f);
-				Vector3[] lineList = MathUtility.Interpolate(8)
-					.Select(t => spline.SamplePositionByPortion(t))
-					.ToArray();
-				Gizmos.DrawLineStrip(lineList, false);
+					// Slope
+					Vector3 tangent = (cp.handleNext - cp.handlePrev) * .5f;
+					Vector3 vSlope = Vector3.Cross(Vector3.up, tangent.normalized) + Vector3.up * cp.slope;
+					Gizmos.color = new(1, 1, 0, .5f);
+					Gizmos.DrawLine(cp.position + vSlope, cp.position - vSlope);
+				}
+
+				// Sections
+				foreach(var section in spline.GetAllSections())
+				{
+					// Handles
+					Gizmos.color = new(1, 1, 0, .5f);
+					Gizmos.DrawLine(section.anchor0, section.cp0);
+					Gizmos.DrawLine(section.anchor1, section.cp1);
+
+					// Section line
+					Gizmos.color = new(1, 1, 1, .5f);
+					Vector3[] lineList = MathUtility.Interpolate(8)
+						.Select(t => section.Sample(t))
+						.ToArray();
+					Gizmos.DrawLineStrip(lineList, false);
+				}
 			}
 		}
 	}
